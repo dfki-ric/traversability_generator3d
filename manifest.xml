@@ -1,19 +1,27 @@
 <package>
-  <description brief="GF">
-  
+  <description brief="Traversability generattion library for navigation of ground vehicles.">
+
   </description>
-  <author>/</author>
-  <license></license>
-  <url>http://</url>
-  <logo>http://</logo>
+  <author>Arne Böckmann/arne.boeckmann@dfki.de</author>
+  <maintainer>Muhammad Haider Khan Lodhi/haider_khan.lodhi@dfki.de</maintainer>
+  <license>not yet</license>
+  <url></url>
+  <logo></logo>
   <depend package="base/cmake" />
   <depend package="slam/maps" />
-  <depend package="slam/orogen/pcl" />  
-  <!--
-   To add any dependencies use the depend tag
-  <depend package="dummy-dependency-0" />
-	...
-  <depend package="dummy-dependency-n-1" />
-  <depend package="dummy-dependency-n" />
-  -->
+  <depend package="slam/orogen/pcl" />
+
+  <keywords>
+    <keyword>mapping</keyword>
+    <keyword>navigation</keyword>
+    <keyword>planning</keyword>
+  </keywords>
+
+  <stage>0</stage>
+  <use>multi project</use>
+  <activity>active</activity>
+
+  <classifiers>
+    <classifier>c++</classifier>
+  </classifiers>
 </package>
