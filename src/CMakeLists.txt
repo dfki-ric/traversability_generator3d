@@ -11,5 +11,4 @@ rock_library(traversability_generator3d
         maps
         pcl_segmentation-${PCL_VERSION_MAJOR}.${PCL_VERSION_MINOR}
         vizkit3d_debug_drawings
-        trajectory_follower          
 )
