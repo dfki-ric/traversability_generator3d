@@ -10,7 +10,7 @@
   <depend package="base/cmake" />
   <depend package="slam/maps" />
   <depend package="slam/orogen/pcl" />
-
+  <depend package="gui/vizkit3d_debug_drawings" />
   <keywords>
     <keyword>mapping</keyword>
     <keyword>navigation</keyword>
