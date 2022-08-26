@@ -50,7 +50,7 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
     Eigen::Vector3d nodePos;
     if(!trMap.fromGrid(node.getIndex(), nodePos, node.getHeight()))
     {
-        std::cout << "TraversabilityGenerator3d: Internal error node out of grid" << std::endl;
+        LOG_INFO_S << "TraversabilityGenerator3d: Internal error node out of grid";
         return false;
     }
 
@@ -102,14 +102,14 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
     if(patchCnt < 5)
     {
         //ransac will not produce a result below 5 points
-//         std::cout << "ransac fail: patchCnt < 5" << std::endl;
+//         LOG_INFO_S << "ransac fail: patchCnt < 5"l;
         return false;
     }
     
     //filter out to sparse areas
     if(patchCnt < patchCntTotal * config.minTraversablePercentage)
     {
-//         std::cout << "TraversabilityGenerator3d::computePlaneRansac : not enough known patches : patchCnt " << patchCnt << " patchCntTotal " << patchCntTotal << " val " << patchCntTotal * config.minTraversablePercentage << std::endl;
+//         LOG_INFO_S << "TraversabilityGenerator3d::computePlaneRansac : not enough known patches : patchCnt " << patchCnt << " patchCntTotal " << patchCntTotal << " val " << patchCntTotal * config.minTraversablePercentagel;
         return false;
     }
 
@@ -133,7 +133,7 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
     seg.segment (inliers, coefficients);
     if (inliers.indices.size () <= 5)
     {
-//         std::cout << "ransac fail: inliers->indices.size () <= 5" << std::endl;
+//         LOG_INFO_S << "ransac fail: inliers->indices.size () <= 5"l;
         return false;
     }
 
@@ -150,7 +150,7 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
     
     if(newPos.x() > 0.0001 || newPos.y() > 0.0001)
     {
-        std::cout << "TraversabilityGenerator3d: Error, adjustement height calculation is weird" << std::endl;
+        LOG_INFO_S << "TraversabilityGenerator3d: Error, adjustement height calculation is weird";
         return false;
     }
 
@@ -345,7 +345,7 @@ bool TraversabilityGenerator3d::checkStepHeight(TravGenNode *node)
     Eigen::Vector3d nodePos;
     if(!trMap.fromGrid(node->getIndex(), nodePos))
     {
-        std::cout << "TraversabilityGenerator3d: Internal error node out of grid" << std::endl;
+        LOG_INFO_S << "TraversabilityGenerator3d: Internal error node out of grid";
         return false;
     }
     nodePos.z() += node->getHeight();
@@ -410,7 +410,7 @@ bool TraversabilityGenerator3d::checkStepHeight(TravGenNode *node)
             Eigen::Vector3d pos;
             if(!area.fromGrid(Index(x,y), pos))
             {
-                std::cout << "this should never happen" << std::endl;
+                LOG_INFO_S << "this should never happen";
             }
 
             for(const SurfacePatch<MLSConfig::SLOPE> *p : area.at(x, y))
@@ -524,7 +524,7 @@ void TraversabilityGenerator3d::expandAll(TravGenNode* startNode, const double e
         
         if((cnd % 1000) == 0)
         {
-            std::cout << "Expanded " << cnd << " nodes" << std::endl;
+            LOG_INFO_S << "Expanded " << cnd << " nodes";
         }
         
         if(!expandNode(node))
@@ -556,7 +556,7 @@ void TraversabilityGenerator3d::expandAll(TravGenNode* startNode, const double e
     //grow obstacle nodes
     inflateObstacles();
    
-    std::cout << "Expanded " << cnd << " nodes" << std::endl;
+    LOG_INFO_S << "Expanded " << cnd << " nodes";
 }
 
 void TraversabilityGenerator3d::inflateObstacles()
@@ -593,7 +593,7 @@ void TraversabilityGenerator3d::addInitialPatchToMLS()
         return;
     
     
-    std::cout << "Adding Initial Patch" << std::endl;
+    LOG_INFO_S << "Adding Initial Patch";
     const Vector2d res = mlsGrid->getResolution();
     
 //         const double sizeHalfX = config.robotSizeX / 2.0;
@@ -616,7 +616,7 @@ void TraversabilityGenerator3d::addInitialPatchToMLS()
             Index idx;
             if(!mlsGrid->toGrid(posMLS, idx))
             {
-                std::cout << "Something is wrong, initial position is outside of MLS !" << std::endl;
+                LOG_INFO_S << "Something is wrong, initial position is outside of MLS !";
                 continue;
             }
             
@@ -628,7 +628,7 @@ void TraversabilityGenerator3d::addInitialPatchToMLS()
                 if(p.isCovered(posMLS.z(), 0.05))
                 {
                     hasPatch = true;
-//                     std::cout << "Found Patch at " << posMLS.transpose() << std::endl;
+//                     LOG_INFO_S << "Found Patch at " << posMLS.transpose();
                     break;
                 }
             }
@@ -637,7 +637,7 @@ void TraversabilityGenerator3d::addInitialPatchToMLS()
                 continue;
                         
             MLGrid::PatchType newPatch(posMLS.cast<float>(), config.initialPatchVariance);
-//             std::cout << "Adding Patch at " << posMLS.transpose() << std::endl;
+//             LOG_INFO_S << "Adding Patch at " << posMLS.transpose();
             
             ll.insert(newPatch);
         }
@@ -654,12 +654,12 @@ void TraversabilityGenerator3d::setMLSGrid(std::shared_ptr< traversability_gener
         addInitialPatchToMLS();
     }
     
-    std::cout << "Grid has size " << grid->getSize().transpose() << " resolution " << grid->getResolution().transpose() << std::endl;
-    std::cout << "Internal resolution is " << trMap.getResolution().transpose() << std::endl;
+    LOG_INFO_S << "Grid has size " << grid->getSize().transpose() << " resolution " << grid->getResolution().transpose();
+    LOG_INFO_S << "Internal resolution is " << trMap.getResolution().transpose();
     Vector2d newSize = grid->getSize().array() / trMap.getResolution().array();
-    std::cout << "MLS was set " << grid->getResolution().transpose() << " " << mlsGrid->getResolution().transpose() << std::endl;
+    LOG_INFO_S << "MLS was set " << grid->getResolution().transpose() << " " << mlsGrid->getResolution().transpose();
 
-    std::cout << "New Size is " << newSize.transpose() << std::endl;
+    LOG_INFO_S << "New Size is " << newSize.transpose();
     
     trMap.extend(Vector2ui(newSize.x(), newSize.y()));
     
@@ -686,7 +686,7 @@ TravGenNode* TraversabilityGenerator3d::generateStartNode(const Eigen::Vector3d&
     Index idx;
     if(!trMap.toGrid(startPos, idx))
     {
-        std::cout << "TraversabilityGenerator3d::generateStartNode: Start position outside of map !" << std::endl;
+        LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Start position outside of map !";
         return nullptr;
     }
 
@@ -694,21 +694,21 @@ TravGenNode* TraversabilityGenerator3d::generateStartNode(const Eigen::Vector3d&
     TravGenNode *startNode = findMatchingTraversabilityPatchAt(idx, startPos.z());
     if(startNode)
     {
-        std::cout << "TraversabilityGenerator3d::generateStartNode: Using existing node " << std::endl;
+        LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Using existing node ";
         return startNode;
     }
 
     startNode = createTraversabilityPatchAt(idx, startPos.z());
     if(!startNode)
     {
-        std::cout << "TraversabilityGenerator3d::generateStartNode: Could not create travNode for given start position, no matching / not enough MLS patches" << std::endl;
+        LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Could not create travNode for given start position, no matching / not enough MLS patches";
         return startNode;
     }
 
     if(startNode->isExpanded() && startNode->getType() != TraversabilityNodeBase::TRAVERSABLE)
     {
-        std::cout << "TraversabilityGenerator3d::generateStartNode: Position is on unknow patch ! " << std::endl;
-        std::cout << "type is: " << startNode->getType() << std::endl;
+        LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Position is on unknow patch ! ";
+        LOG_INFO_S << "type is: " << startNode->getType();
     }
     
     return startNode;
@@ -888,7 +888,7 @@ void TraversabilityGenerator3d::addConnectedPatches(TravGenNode *  node)
         //not sure if this can still happen.
         if((patchPosPlane.head(2) - newPos.head(2)).norm() > 0.001)
         {
-            std::cout << "TraversabilityGenerator3d: FATAL ERROR, adjustment height calculation is weird" << std::endl;
+            LOG_INFO_S << "TraversabilityGenerator3d: FATAL ERROR, adjustment height calculation is weird";
             return;
         }
 
@@ -911,7 +911,7 @@ void TraversabilityGenerator3d::addConnectedPatches(TravGenNode *  node)
 
         if(!newPos.allFinite())
         {
-            std::cout << "newPos contains inf" << std::endl;
+            LOG_INFO_S << "newPos contains inf";
             continue;
         }
         
