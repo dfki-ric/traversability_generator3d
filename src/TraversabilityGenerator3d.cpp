@@ -719,9 +719,14 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
 {
     node->setExpanded();
 
-    if(node->getType() == TraversabilityNodeBase::UNKNOWN
-        || node->getType() == TraversabilityNodeBase::OBSTACLE)
-    {        
+    if(node->getType() == TraversabilityNodeBase::UNKNOWN)
+    {       
+        return false;
+    }
+
+    if(node->getType() == TraversabilityNodeBase::OBSTACLE)
+    {   
+        obstacleNodesGrowList.push_back(node);       
         return false;
     }
 
