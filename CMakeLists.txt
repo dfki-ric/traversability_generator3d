@@ -9,5 +9,9 @@ find_package(Rock)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(ENABLE_DEBUG_DRAWINGS)
+  add_definitions(-DENABLE_DEBUG_DRAWINGS)
+endif()
+
 rock_init()
 rock_standard_layout()
