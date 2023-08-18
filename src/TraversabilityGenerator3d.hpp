@@ -1,7 +1,7 @@
 #pragma once
 
 #include <maps/grid/MLSMap.hpp>
-#include <boost/shared_ptr.hpp>
+#include <memory>
 #include "TraversabilityConfig.hpp"
 #include "TravGenNode.hpp"
 
