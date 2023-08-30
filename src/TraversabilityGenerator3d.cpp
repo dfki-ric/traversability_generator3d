@@ -14,8 +14,11 @@ namespace traversability_generator3d
 
 TraversabilityGenerator3d::TraversabilityGenerator3d(const TraversabilityConfig& config) : addInitialPatch(false), config(config)
 {
+    if (config.gridResolution == 0.5 || config.gridResolution == 1.0){
+        LOG_ERROR_S << "TraversabilityGenerator3D: Initialization error. Grid resolutions 0.5, 1.0 are currently not supported!";
+        throw std::runtime_error("TraversabilityGenerator3D: Initialization error. Grid resolutions 0.5, 1.0 are currently not supported!");
+    }
     trMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
-
 }
 
 TraversabilityGenerator3d::~TraversabilityGenerator3d()
