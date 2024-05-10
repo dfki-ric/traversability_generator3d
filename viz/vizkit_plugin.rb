@@ -1,0 +1,2 @@
+Vizkit::UiLoader.register_3d_plugin('SoilMap3dVisualization', "traversability_generator3d", 'SoilMap3dVisualization' )
+Vizkit::UiLoader.register_3d_plugin_for('SoilMap3dVisualization', "/maps/grid/TraversabilityBaseMap3d", :updateData )

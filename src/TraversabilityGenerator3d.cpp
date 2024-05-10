@@ -12,10 +12,12 @@ using namespace maps::grid;
 namespace traversability_generator3d
 {
 
-TraversabilityGenerator3d::TraversabilityGenerator3d(const TraversabilityConfig& config) : addInitialPatch(false), config(config)
+TraversabilityGenerator3d::TraversabilityGenerator3d(const TraversabilityConfig& config) : addInitialPatch(false), 
+                                                                                           soilGridInitialized(false), 
+                                                                                           config(config)
 {
     trMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
-
+    soilMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
 }
 
 TraversabilityGenerator3d::~TraversabilityGenerator3d()
@@ -38,6 +40,12 @@ const maps::grid::TraversabilityMap3d<TravGenNode *> & TraversabilityGenerator3d
 {
     return trMap;
 }
+
+const maps::grid::TraversabilityMap3d<SoilNode *> & TraversabilityGenerator3d::getSoilMap() const
+{
+    return soilMap;
+}
+
 
 int TraversabilityGenerator3d::getNumNodes() const
 {
@@ -663,8 +671,29 @@ void TraversabilityGenerator3d::setMLSGrid(std::shared_ptr< traversability_gener
     LOG_INFO_S << "New Size is " << newSize.transpose();
 
     trMap.extend(Vector2ui(newSize.x(), newSize.y()));
-
     trMap.getLocalFrame() = mlsGrid->getLocalFrame();
+
+    if (!soilGridInitialized){
+        soilMap.extend(Vector2ui(newSize.x(), newSize.y()));
+        soilMap.getLocalFrame() = mlsGrid->getLocalFrame();   
+        soilGridInitialized = true;
+
+        for (int x{0}; x < newSize.x(); ++x){
+            for (int y{0}; y < newSize.y(); ++y){
+                maps::grid::Index idx(x,y);
+
+                //check if not already exists...
+                SoilNode *node = findMatchingSoilPatchAt(idx, 0);
+                if(node)
+                {
+                    LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Using existing node ";
+                    continue;
+                }
+
+                createSoilPatchAt(idx, 0);
+            }
+        }
+    }
 
     clearTrMap();
 }
@@ -710,6 +739,33 @@ TravGenNode* TraversabilityGenerator3d::generateStartNode(const Eigen::Vector3d&
     {
         LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Position is on unknow patch ! ";
         LOG_INFO_S << "type is: " << startNode->getType();
+    }
+
+    return startNode;
+}
+
+SoilNode* TraversabilityGenerator3d::generateStartSoilNode(const Eigen::Vector3d& startPos)
+{
+    Index idx;
+    if(!soilMap.toGrid(startPos, idx))
+    {
+        LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Start position outside of map !";
+        return nullptr;
+    }
+
+    //check if not already exists...
+    SoilNode *startNode = findMatchingSoilPatchAt(idx, 0);
+    if(startNode)
+    {
+        LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Using existing node ";
+        return startNode;
+    }
+
+    startNode = createSoilPatchAt(idx, 0);
+    if(!startNode)
+    {
+        LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Could not create travNode for given start position, no matching / not enough MLS patches";
+        return startNode;
     }
 
     return startNode;
@@ -943,6 +999,131 @@ void TraversabilityGenerator3d::addConnectedPatches(TravGenNode *  node)
     }
 }
 
+SoilNode *TraversabilityGenerator3d::createSoilPatchAt(maps::grid::Index idx, const double curHeight)
+{
+    SoilNode *ret = nullptr;
 
+    ret = new SoilNode(0.0, idx);
+    ret->getUserData().id = currentSoilNodeId++;
+    ret->setHeight(curHeight);
+    ret->setNotExpanded();
+    ret->setType(TraversabilityNodeBase::UNSET);
+    ret->getUserData().soil_type = -1;
+    soilMap.at(idx).insert(ret);
+    return ret;
+}
+
+
+SoilNode* TraversabilityGenerator3d::findMatchingSoilPatchAt(Index idx, const double curHeight) const
+{
+    auto &trList(soilMap.at(idx));
+
+    //check if we got an existing node
+    for(SoilNode *snode : trList)
+    {
+        return snode;
+    }
+
+    return nullptr;
+}
+
+void TraversabilityGenerator3d::setSoilType(SoilNode * node, int soilType){
+
+    node->getUserData().soil_type = soilType;
+
+    switch(soilType)
+    {
+        //Just used to set the colors in the visualization for now
+        //TODO: Need to use the GroundNode and its GROUNDTYPE in the SoilMap3dVisualization
+        case 0:
+            node->setType(TraversabilityNodeBase::FRONTIER);
+            break;
+        case 1:
+            node->setType(TraversabilityNodeBase::HOLE);
+            break;
+        case 2:
+            node->setType(TraversabilityNodeBase::TRAVERSABLE);
+            break;
+        case 3:
+            node->setType(TraversabilityNodeBase::OBSTACLE);
+            break;
+        default:
+            node->setType(TraversabilityNodeBase::UNKNOWN);
+            break;
+    }
+}
+
+void TraversabilityGenerator3d::addSoilNode(const Eigen::Vector3d &position, int soilType){
+
+    SoilNode * node = generateStartSoilNode(position);
+    if(!node){
+        LOG_ERROR_S << "Failed to add soil patch to the soilMap";
+        return;
+    }
+
+    setSoilType(node, soilType);
+}
+
+
+void TraversabilityGenerator3d::addSoilNode(const Eigen::Vector3d &center, 
+                                            const Eigen::Vector3d &min, 
+                                            const Eigen::Vector3d &max, 
+                                            int soilType){
+
+    const Vector2d res = mlsGrid->getResolution();
+
+    //we oversample by factor 2 to account for aliasing
+    for(double x = min.x(); x <= max.x(); x += res.x() / 2.0)
+    {
+        for(double y = min.y(); y <= max.y(); y += res.y() / 2.0)
+        {
+            Vector3d pos(x, y, 0);
+            Vector3d posMLS = center + pos;
+
+            SoilNode * node = generateStartSoilNode(posMLS);
+
+            if(!node){
+                LOG_ERROR_S << "Failed to add soil patch to the soilMap";
+                continue;
+            }
+
+            setSoilType(node, soilType);
+        }
+    }
+}
+
+void TraversabilityGenerator3d::addSoilNode(const Eigen::Vector3d &center, double radius, int soilType){
+
+    const Vector2d res = mlsGrid->getResolution();
+
+    const double sizeHalfX = radius;
+    const double sizeHalfY = radius;
+
+    //we oversample by factor 2 to account for aliasing
+    for(double x = -sizeHalfX; x <= sizeHalfX; x += res.x() / 2.0)
+    {
+        for(double y = -sizeHalfY; y <= sizeHalfY; y += res.y() / 2.0)
+        {
+            if(Vector2d(x,y).norm() > radius)
+                continue;
+
+            Vector3d pos(x, y, 0);
+            Vector3d posMLS = center + pos;
+
+            SoilNode * node = generateStartSoilNode(posMLS);
+
+            if(!node){
+                LOG_ERROR_S << "Failed to add soil patch to the soilMap";
+                continue;
+            }
+
+            setSoilType(node, soilType);
+        }
+    }
+
+    //expand the soil nodes
+    //addSoilPatches(node);
+    return;
+}
 
 }
