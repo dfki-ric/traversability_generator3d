@@ -23,11 +23,11 @@ soil_map_plugin				                        = Vizkit.default_loader.Traversabilit
 planned_trajectory_plugin                           = Vizkit.default_loader.TrajectoryVisualization
 
 # load GUI created with the Qt Designer
-widget = Vizkit.load "vizkit_widget.ui"
+widget = Vizkit.load "widget.ui"
 widget.show
 
 #Set frame
-Vizkit.vizkit3d_widget.setPluginDataFrame("ground_truth", robot_visualization_current_state_plugin )
+Vizkit.vizkit3d_widget.setPluginDataFrame("artemis", robot_visualization_current_state_plugin )
 Vizkit.vizkit3d_widget.setPluginDataFrame("ground_truth", soil_map_plugin )
 Vizkit.vizkit3d_widget.setPluginDataFrame("ground_truth", planned_trajectory_plugin )
 

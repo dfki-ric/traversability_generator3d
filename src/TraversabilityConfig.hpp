@@ -34,11 +34,11 @@ public:
         , initialPatchVariance(0.01 * 0.01)
         , allowForwardDownhill(true)
         , enableInclineLimitting(false)    
-        , costUnknownSoil(100)
+        , costUnknownSoil(500)
         , costConcreteSoil(0)
         , costRockySoil(1000)
-        , costSandSoil(50)
-        , costGravelSoil(30)
+        , costSandSoil(300)
+        , costGravelSoil(150)
     {};
     
     /** The maximum step height that the robot can traverse.
