@@ -33,7 +33,12 @@ public:
         , gridResolution(0.0)
         , initialPatchVariance(0.01 * 0.01)
         , allowForwardDownhill(true)
-        , enableInclineLimitting(false)        
+        , enableInclineLimitting(false)    
+        , costUnknownSoil(100)
+        , costConcreteSoil(0)
+        , costRockySoil(1000)
+        , costSandSoil(50)
+        , costGravelSoil(30)
     {};
     
     /** The maximum step height that the robot can traverse.
@@ -92,8 +97,12 @@ public:
     
     /** if true, incline limitting is enabled and the robot motion is restricted when moving on steep hills. */
     bool enableInclineLimitting;
-    
+
+    /** Soil costs*/
+    int costUnknownSoil; 
+    int costConcreteSoil;
+    int costRockySoil; 
+    int costSandSoil; 
+    int costGravelSoil; 
 };
-
-
 }

@@ -4,6 +4,8 @@ rock_library(traversability_generator3d
     SOURCES TraversabilityGenerator3d.cpp
     HEADERS TraversabilityGenerator3d.hpp
             TravGenNode.hpp
+            SoilNode.hpp
+            SoilSample.hpp
             TraversabilityConfig.hpp
             TravMapBfsVisitor.hpp         
     DEPS_PKGCONFIG 

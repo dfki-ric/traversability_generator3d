@@ -4,6 +4,7 @@
 #include <boost/shared_ptr.hpp>
 #include "TraversabilityConfig.hpp"
 #include "TravGenNode.hpp"
+#include "SoilNode.hpp"
 
 namespace traversability_generator3d
 {
@@ -77,11 +78,13 @@ public:
     virtual ~TraversabilityGenerator3d();
 
     void clearTrMap();
+
+    void clearSoilMap();
     
     void setInitialPatch(const Eigen::Affine3d &ground2Mls, double patchRadius);
 
     void setSoilType(SoilNode * node, int soilType);
-    void addSoilNode(const Eigen::Vector3d &position, int soilType);
+    void addSoilNode(const Eigen::Vector3d &center, int soilType);
     void addSoilNode(const Eigen::Vector3d &center, double radius, int soilType);
     void addSoilNode(const Eigen::Vector3d &center, const Eigen::Vector3d &min, const Eigen::Vector3d &max, int soilType);
 

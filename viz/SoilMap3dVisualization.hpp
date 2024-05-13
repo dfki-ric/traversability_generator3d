@@ -36,7 +36,7 @@
     #include <maps/grid/TraversabilityMap3d.hpp>
 #endif
 
-#include <traversability_generator3d/TravGenNode.hpp>
+#include <traversability_generator3d/SoilNode.hpp>
 
 
 namespace vizkit3d

@@ -711,6 +711,20 @@ void TraversabilityGenerator3d::clearTrMap()
     }
 }
 
+void TraversabilityGenerator3d::clearSoilMap()
+{
+    for(LevelList<SoilNode *> &l : soilMap)
+    {
+        for(SoilNode *n : l)
+        {
+            delete n;
+        }
+
+        l.clear();
+    }
+    soilGridInitialized = false;
+}
+
 TravGenNode* TraversabilityGenerator3d::generateStartNode(const Eigen::Vector3d& startPos)
 {
     Index idx;
@@ -1053,9 +1067,9 @@ void TraversabilityGenerator3d::setSoilType(SoilNode * node, int soilType){
     }
 }
 
-void TraversabilityGenerator3d::addSoilNode(const Eigen::Vector3d &position, int soilType){
+void TraversabilityGenerator3d::addSoilNode(const Eigen::Vector3d &center, int soilType){
 
-    SoilNode * node = generateStartSoilNode(position);
+    SoilNode * node = generateStartSoilNode(center);
     if(!node){
         LOG_ERROR_S << "Failed to add soil patch to the soilMap";
         return;
@@ -1092,7 +1106,9 @@ void TraversabilityGenerator3d::addSoilNode(const Eigen::Vector3d &center,
     }
 }
 
-void TraversabilityGenerator3d::addSoilNode(const Eigen::Vector3d &center, double radius, int soilType){
+void TraversabilityGenerator3d::addSoilNode(const Eigen::Vector3d &center, 
+                                            double radius, 
+                                            int soilType){
 
     const Vector2d res = mlsGrid->getResolution();
 
