@@ -1100,12 +1100,15 @@ void TraversabilityGenerator3d::addSoilNode(const Eigen::Vector3d &center,
                                             const Eigen::Vector3d &max, 
                                             int soilType){
 
-    const Vector2d res = mlsGrid->getResolution();
+    const Vector2d res = soilMap.getResolution();
+
+    double sizeX = max.x() - min.x();
+    double sizeY = max.y() - min.y();
 
     //we oversample by factor 2 to account for aliasing
-    for(double x = min.x(); x <= max.x(); x += res.x() / 2.0)
+    for(double x = -sizeX/2; x <= sizeX/2; x += res.x() / 2.0)
     {
-        for(double y = min.y(); y <= max.y(); y += res.y() / 2.0)
+        for(double y = -sizeY/2; y <= sizeY/2; y += res.y() / 2.0)
         {
             Vector3d pos(x, y, 0);
             Vector3d posMLS = center + pos;
