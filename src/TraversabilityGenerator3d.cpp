@@ -694,6 +694,22 @@ void TraversabilityGenerator3d::setMLSGrid(std::shared_ptr< traversability_gener
             }
         }
     }
+    else{
+        soilMap.expandGrid(Vector2ui(newSize.x(), newSize.y()));
+        for (int x{0}; x < newSize.x(); ++x){
+            for (int y{0}; y < newSize.y(); ++y){
+                maps::grid::Index idx(x,y);
+                //check if not already exists...
+                SoilNode *node = findMatchingSoilPatchAt(idx, 0);
+                if(node)
+                {
+                    LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Using existing node ";
+                    continue;
+                }
+                createSoilPatchAt(idx, 0);
+            }
+        }        
+    }
 
     clearTrMap();
 }
