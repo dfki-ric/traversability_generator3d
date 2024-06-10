@@ -1,4 +1,5 @@
 #include "TraversabilityGenerator3d.hpp"
+#include "SoilSample.hpp"
 #include <numeric/PlaneFitting.hpp>
 #include <pcl/sample_consensus/ransac.h>
 #include <pcl/segmentation/sac_segmentation.h>
@@ -673,15 +674,18 @@ void TraversabilityGenerator3d::setMLSGrid(std::shared_ptr< traversability_gener
     trMap.extend(Vector2ui(newSize.x(), newSize.y()));
     trMap.getLocalFrame() = mlsGrid->getLocalFrame();
 
+    std::cout << "Adding Soil Map! " << std::endl;
+
     if (!soilGridInitialized){
+        std::cout << "Initializing Soil Map! " << newSize.transpose() << std::endl;
         soilMap.extend(Vector2ui(newSize.x(), newSize.y()));
         soilMap.getLocalFrame() = mlsGrid->getLocalFrame();   
         soilGridInitialized = true;
 
-        for (int x{0}; x < newSize.x(); ++x){
-            for (int y{0}; y < newSize.y(); ++y){
+        for (int x{0}; x < newSize.x()-1; ++x){
+            for (int y{0}; y < newSize.y()-1; ++y){
                 maps::grid::Index idx(x,y);
-
+                std::cout << "Index! " << idx.transpose() << std::endl;
                 //check if not already exists...
                 SoilNode *node = findMatchingSoilPatchAt(idx, 0);
                 if(node)
@@ -689,8 +693,9 @@ void TraversabilityGenerator3d::setMLSGrid(std::shared_ptr< traversability_gener
                     LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Using existing node ";
                     continue;
                 }
-
+                std::cout << "Adding Soil Patch! " << std::endl;
                 createSoilPatchAt(idx, 0);
+                std::cout << "Added Soil Patch! " << std::endl;
             }
         }
     }
@@ -712,6 +717,8 @@ void TraversabilityGenerator3d::setMLSGrid(std::shared_ptr< traversability_gener
     }
 
     clearTrMap();
+
+    std::cout << "Finished adding MLS! " << std::endl;
 }
 
 void TraversabilityGenerator3d::clearTrMap()
@@ -1065,16 +1072,16 @@ void TraversabilityGenerator3d::setSoilType(SoilNode * node, int soilType){
     {
         //Just used to set the colors in the visualization for now
         //TODO: Need to use the GroundNode and its GROUNDTYPE in the SoilMap3dVisualization
-        case 0:
+        case SoilType::CONCRETE:
             node->setType(TraversabilityNodeBase::FRONTIER);
             break;
-        case 1:
+        case SoilType::ROCKS:
             node->setType(TraversabilityNodeBase::HOLE);
             break;
-        case 2:
+        case SoilType::SAND:
             node->setType(TraversabilityNodeBase::TRAVERSABLE);
             break;
-        case 3:
+        case SoilType::GRAVEL:
             node->setType(TraversabilityNodeBase::OBSTACLE);
             break;
         default:

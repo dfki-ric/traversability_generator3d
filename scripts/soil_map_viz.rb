@@ -82,15 +82,15 @@ widget.btn_concrete.connect(SIGNAL('clicked()')) do
     sample = Types::Traversability_generator3d::SoilSample.new()
 
     if (widget.listSampleTypes.currentItem.text == "POINT")
-        sample.type = 0
+        sample.sampleType = 0
     end
 
     if (widget.listSampleTypes.currentItem.text == "CIRCLE")
-        sample.type = 1
+        sample.sampleType = 1
     end
 
     if (widget.listSampleTypes.currentItem.text == "BOX")
-        sample.type = 2
+        sample.sampleType = 2
     end
 
     sample.min = Eigen::Vector3.new(widget.min_x.value, widget.min_y.value, 0)
@@ -109,15 +109,15 @@ widget.btn_rocks.connect(SIGNAL('clicked()')) do
     sample = Types::Traversability_generator3d::SoilSample.new()
 
     if (widget.listSampleTypes.currentItem.text == "POINT")
-        sample.type = 0
+        sample.sampleType = 0
     end
 
     if (widget.listSampleTypes.currentItem.text == "CIRCLE")
-        sample.type = 1
+        sample.sampleType = 1
     end
 
     if (widget.listSampleTypes.currentItem.text == "BOX")
-        sample.type = 2
+        sample.sampleType = 2
     end
 
     sample.min = Eigen::Vector3.new(widget.min_x.value, widget.min_y.value, 0)
@@ -137,15 +137,15 @@ widget.btn_sand.connect(SIGNAL('clicked()')) do
     sample = Types::Traversability_generator3d::SoilSample.new()
 
     if (widget.listSampleTypes.currentItem.text == "POINT")
-        sample.type = 0
+        sample.sampleType = 0
     end
 
     if (widget.listSampleTypes.currentItem.text == "CIRCLE")
-        sample.type = 1
+        sample.sampleType = 1
     end
 
     if (widget.listSampleTypes.currentItem.text == "BOX")
-        sample.type = 2
+        sample.sampleType = 2
     end
 
     sample.min = Eigen::Vector3.new(widget.min_x.value, widget.min_y.value, 0)
@@ -164,15 +164,15 @@ widget.btn_gravel.connect(SIGNAL('clicked()')) do
     sample = Types::Traversability_generator3d::SoilSample.new()
 
     if (widget.listSampleTypes.currentItem.text == "POINT")
-        sample.type = 0
+        sample.sampleType = 0
     end
 
     if (widget.listSampleTypes.currentItem.text == "CIRCLE")
-        sample.type = 1
+        sample.sampleType = 1
     end
 
     if (widget.listSampleTypes.currentItem.text == "BOX")
-        sample.type = 2
+        sample.sampleType = 2
     end
 
     sample.min = Eigen::Vector3.new(widget.min_x.value, widget.min_y.value, 0)
