@@ -9,12 +9,136 @@
 #include <deque>
 using namespace maps::grid;
 
+
+// Function to create a rotation transformation around an arbitrary axis
+Transformation create_rotation_transformation(const Vector_3& current_up, const Vector_3& target_normal) {
+    // Normalize vectors
+    Vector_3 current_up_normalized = current_up / std::sqrt(current_up.squared_length());
+    Vector_3 target_normal_normalized = target_normal / std::sqrt(target_normal.squared_length());
+
+    // Calculate the rotation axis and check for zero-length (parallel vectors)
+    Vector_3 rotation_axis = CGAL::cross_product(current_up_normalized, target_normal_normalized);
+    double axis_length = std::sqrt(rotation_axis.squared_length());
+    if (axis_length == 0) {
+        // If the axis length is zero, the vectors are already aligned; no rotation needed.
+        return Transformation(CGAL::IDENTITY);
+    }
+
+    // Normalize the rotation axis
+    rotation_axis = rotation_axis / axis_length;
+
+    // Calculate the angle using the dot product
+    double dot_product = current_up_normalized * target_normal_normalized;
+    double angle = std::acos(dot_product); // Angle in radians
+
+    // Create the rotation matrix elements
+    double cos_theta = std::cos(angle);
+    double sin_theta = std::sin(angle);
+    double u = rotation_axis.x(), v = rotation_axis.y(), w = rotation_axis.z();
+
+    // Rotation matrix based on Rodrigues' rotation formula
+    double r00 = cos_theta + u * u * (1 - cos_theta);
+    double r01 = u * v * (1 - cos_theta) - w * sin_theta;
+    double r02 = u * w * (1 - cos_theta) + v * sin_theta;
+    double r10 = v * u * (1 - cos_theta) + w * sin_theta;
+    double r11 = cos_theta + v * v * (1 - cos_theta);
+    double r12 = v * w * (1 - cos_theta) - u * sin_theta;
+    double r20 = w * u * (1 - cos_theta) - v * sin_theta;
+    double r21 = w * v * (1 - cos_theta) + u * sin_theta;
+    double r22 = cos_theta + w * w * (1 - cos_theta);
+
+    // Create the rotation transformation using the matrix
+    Transformation rotation(r00, r01, r02, 0,
+                            r10, r11, r12, 0,
+                            r20, r21, r22, 0);
+
+    return rotation;
+}
+
+
 namespace traversability_generator3d
 {
 
 TraversabilityGenerator3d::TraversabilityGenerator3d(const TraversabilityConfig& config) : addInitialPatch(false), config(config)
 {
     trMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
+
+    // Assume center of robot at (0,0,0) for simplicity
+    double robothalflength = config.robotSizeX / 2.0;
+    double robothalfwidth = config.robotSizeY / 2.0;
+    double robothalfheight = config.robotHeight / 2.0;
+
+    robotEdges = {
+        {robothalflength, robothalfwidth, robothalfheight},   // Top right front
+        {robothalflength, robothalfwidth, -robothalfheight},  // Top right back
+        {robothalflength, -robothalfwidth, robothalfheight},  // Bottom right front
+        {robothalflength, -robothalfwidth, -robothalfheight}, // Bottom right back
+        {-robothalflength, robothalfwidth, robothalfheight},  // Top left front
+        {-robothalflength, robothalfwidth, -robothalfheight}, // Top left back
+        {-robothalflength, -robothalfwidth, robothalfheight}, // Bottom left front
+        {-robothalflength, -robothalfwidth, -robothalfheight} // Bottom left back
+    };
+
+    robotPolyhedron = generatePolyhedron(robotEdges);
+
+
+    // Assume center of robot at (0,0,0) for simplicity
+    double patchhalflength = config.gridResolution/2;
+    double patchhalfwidth = config.gridResolution/2;
+
+    //TODO: Hardcoded for now!
+    patchheight = 0.02;
+
+    double patchhalfheight = patchheight/2;
+
+    patchEdges = {
+        {patchhalflength, patchhalfwidth, patchhalfheight},   // Top right front
+        {patchhalflength, patchhalfwidth, -patchhalfheight},  // Top right back
+        {patchhalflength, -patchhalfwidth, patchhalfheight},  // Bottom right front
+        {patchhalflength, -patchhalfwidth, -patchhalfheight}, // Bottom right back
+        {-patchhalflength, patchhalfwidth, patchhalfheight},  // Top left front
+        {-patchhalflength, patchhalfwidth, -patchhalfheight}, // Top left back
+        {-patchhalflength, -patchhalfwidth, patchhalfheight}, // Bottom left front
+        {-patchhalflength, -patchhalfwidth, -patchhalfheight} // Bottom left back
+    };
+
+    patchPolyhedron = generatePolyhedron(patchEdges);
+}
+
+Polyhedron_3 TraversabilityGenerator3d::generatePolyhedron(std::vector<Eigen::Vector3d> points){
+    std::vector<Point_3> cgal_p3;   
+
+    for (auto it = points.cbegin(); it != points.cend(); ++it){
+        Point_3 p(it->x(), it->y(), it->z());
+        cgal_p3.push_back(p);
+    }
+    
+    CGAL::Object ch_object;
+    CGAL::convex_hull_3(cgal_p3.begin(), cgal_p3.end(), ch_object);
+    Polyhedron_3 polyhedron;
+    CGAL::assign (polyhedron, ch_object);
+
+    return polyhedron;
+}
+
+void TraversabilityGenerator3d::transformPolyhedron(Polyhedron_3& polyhedron, const Transformation& transform){
+    // Apply the combined transformation to each point in the polyhedron
+    std::transform(polyhedron.points_begin(), polyhedron.points_end(), polyhedron.points_begin(), transform);
+}
+
+Transformation TraversabilityGenerator3d::generateTransform(const Eigen::Vector3d& normal, const Eigen::Vector3d& translation){
+
+    Vector_3 current_up(0, 0, 1);
+    Vector_3 patch_normal(normal.x(), normal.y(), normal.z());
+
+    // Create the rotation transformation
+    Transformation rotate = create_rotation_transformation(current_up, patch_normal);
+
+    Vector_3 translation_vector(translation.x(), translation.y(), translation.z());
+    Transformation translate(CGAL::TRANSLATION, translation_vector);
+
+    Transformation combined = translate * rotate;
+    return combined;    
 }
 
 TraversabilityGenerator3d::~TraversabilityGenerator3d()
@@ -325,6 +449,25 @@ bool TraversabilityGenerator3d::checkForFrontier(const TravGenNode* node)
     return false;
 }
 
+
+void TraversabilityGenerator3d::drawWireFrameBox(const Eigen::Vector3d& normal, const Eigen::Vector3d& position, const Eigen::Vector3d& size, const Eigen::Vector4d& colorRGBA){
+    Transformation transform = generateTransform(normal, position);
+
+    Eigen::Matrix3d rotation_matrix;
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            rotation_matrix(i, j) = transform.m(i, j); // Access rotation part of the matrix
+        }
+    }
+
+    Eigen::Quaterniond orientation(rotation_matrix);
+
+     V3DD::COMPLEX_DRAWING([&]
+     {
+        V3DD::DRAW_WIREFRAME_BOX("traversability_generator3d_mls_patch_box", position, orientation, size, colorRGBA);
+     });
+}
+
 bool TraversabilityGenerator3d::checkStepHeight(TravGenNode *node)
 {
 
@@ -332,14 +475,6 @@ bool TraversabilityGenerator3d::checkStepHeight(TravGenNode *node)
      * Check if any of the patches around @p node that the robot might stand on is higher than stepHeight.
      * I.e. if any of the patches is so high that it would be inside the robots body.
      */
-
-    const double slope = node->getUserData().slope;
-
-    if(slope > config.maxSlope)
-    {
-        return false;
-    }
-
 
     Eigen::Vector3d nodePos;
     if(!trMap.fromGrid(node->getIndex(), nodePos))
@@ -349,6 +484,25 @@ bool TraversabilityGenerator3d::checkStepHeight(TravGenNode *node)
     }
     nodePos.z() += node->getHeight();
 
+    Eigen::Vector3d robotCenterPos = nodePos;
+    robotCenterPos.z() += config.maxStepHeight + config.robotHeight/2;
+
+    Transformation transform = generateTransform(node->getUserData().plane.normal(), robotCenterPos);
+    Polyhedron_3 robot = robotPolyhedron;
+    transformPolyhedron(robot,transform);
+
+    Eigen::Matrix3d rotation_matrix;
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            rotation_matrix(i, j) = transform.m(i, j); // Access rotation part of the matrix
+        }
+    }
+
+    Eigen::Quaterniond robotOrientation(rotation_matrix);
+    Eigen::Vector3d robotSize{config.robotSizeX, config.robotSizeY, config.robotHeight};
+
+
+    //TODO: Old code use for now to get the intersection with MLS
     const double smallerRobotSize = std::min(config.robotSizeX, config.robotSizeY);
     const double growSize = smallerRobotSize / 2.0 + 1e-5;
 
@@ -362,23 +516,8 @@ bool TraversabilityGenerator3d::checkStepHeight(TravGenNode *node)
     const Eigen::AlignedBox3d limitBox(min, max);
     View area = mlsGrid->intersectCuboid(limitBox);
 
-
-
-//     V3DD::COMPLEX_DRAWING([&]
-//     {
-//         static int i = 0;
-//         ++i;
-//         if((i % 30) == 0)
-//             V3DD::DRAW_AABB("traversability_generator3d_trav_obstacle_check_box", limitBox, V3DD::Color::red);
-//     });
-
-
-    const Eigen::Hyperplane<double, 3> &plane(node->getUserData().plane);
-
-
     Index minIdx;
     Index maxIdx;
-
 
     if(!mlsGrid->toGrid(limitBox.min(), minIdx))
     {
@@ -412,13 +551,29 @@ bool TraversabilityGenerator3d::checkStepHeight(TravGenNode *node)
                 LOG_INFO_S << "this should never happen";
             }
 
+            //TODO: Fix the real cause of the offset!
+            pos.x() += nodePos.x() - 1.5 * config.gridResolution;
+            pos.y() += nodePos.y() - 1.5 * config.gridResolution;
+
             for(const SurfacePatch<MLSConfig::SLOPE> *p : area.at(x, y))
             {
-                pos.z() = (p->getTop()+p->getBottom())/2.;
-                float dist = plane.absDistance(pos);
-                //bounding box already checks height of robot
-                if(dist > config.maxStepHeight)
+                Eigen::Vector3f surface(0,0,0);
+                pos.z() = p->getSurfacePos(surface);
+
+                Polyhedron_3 patch = createPolyhedronFromSurfacePatch(p,pos);
+                if(CGAL::Polygon_mesh_processing::do_intersect(patch,robot))
                 {
+                    V3DD::COMPLEX_DRAWING([&]
+                    {
+                        V3DD::DRAW_WIREFRAME_BOX("traversability_generator3d_trav_obstacle_check_box", robotCenterPos, robotOrientation, robotSize, V3DD::Color::red);
+                    });
+
+                    Eigen::Vector3d patchSize{config.gridResolution, config.gridResolution, patchheight};
+                    Eigen::Vector3f normalf = p->getNormal(); 
+                    Eigen::Vector3d normal{normalf.x(), normalf.y(), normalf.z()};
+
+                    drawWireFrameBox(normal,pos,patchSize,V3DD::Color::blue);
+
                     return false;
                 }
             }
@@ -426,6 +581,19 @@ bool TraversabilityGenerator3d::checkStepHeight(TravGenNode *node)
     }
 
     return true;
+    
+}
+
+Polyhedron_3 TraversabilityGenerator3d::createPolyhedronFromSurfacePatch(const SurfacePatch<MLSConfig::SLOPE> *p, const Eigen::Vector3d& position){
+
+    // Extract the normal and center of the surface patch
+    Eigen::Vector3f normalf = p->getNormal();  // Normal vector of the plane
+    Eigen::Vector3d normal{normalf.x(), normalf.y(), normalf.z()};
+
+    Polyhedron_3 patch = patchPolyhedron;
+    Transformation transform = generateTransform(normal, position);
+    transformPolyhedron(patch,transform);
+    return patch;
 }
 
 void TraversabilityGenerator3d::growNodes()
@@ -727,6 +895,10 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
     if(node->getType() == TraversabilityNodeBase::OBSTACLE)
     {
         obstacleNodesGrowList.push_back(node);
+        return false;
+    }
+
+    if(node->getUserData().slope > config.maxSlope){
         return false;
     }
 
