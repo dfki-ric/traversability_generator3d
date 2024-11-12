@@ -23,7 +23,7 @@ public:
         , inclineLimittingMinSlope(0.2)
         , inclineLimittingLimit(0.1)
         , costFunctionDist(0.0)
-        , minTraversablePercentage(0.8)
+        , minTraversablePercentage(0.4)
         , robotHeight(0.5)
         , robotSizeX(0.5)
         , robotSizeY(0.5)
