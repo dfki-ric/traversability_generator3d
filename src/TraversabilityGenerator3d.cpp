@@ -431,7 +431,7 @@ void TraversabilityGenerator3d::drawWireFrameBox(const Eigen::Vector3d& normal, 
 #endif
 }
 
-bool TraversabilityGenerator3d::checkStepHeight(TravGenNode *node)
+bool TraversabilityGenerator3d::checkStepHeightAABB(TravGenNode *node)
 {
 
     /** What this method does:
@@ -514,12 +514,11 @@ bool TraversabilityGenerator3d::checkStepHeight(TravGenNode *node)
     return true;
 }
 
-bool TraversabilityGenerator3d::checkStepHeightOnSlope(TravGenNode *node)
+bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
 {
-
     /** What this method does:
-     * Check if any of the patches around @p node that the robot might stand on is higher than stepHeight.
-     * I.e. if any of the patches is so high that it would be inside the robots body.
+     * Check if any of the patches within the robot OBB
+     * @p node come into collison with the robot.
      */
 
     Eigen::Vector3d nodePos;
@@ -947,9 +946,9 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
         return false;
     }
 
-    if(!checkStepHeight(node))
+    if(!checkStepHeightAABB(node))
     {
-        if(!checkStepHeightOnSlope(node))
+        if(!checkStepHeightOBB(node))
         {
             node->setType(TraversabilityNodeBase::OBSTACLE);
             obstacleNodesGrowList.push_back(node);

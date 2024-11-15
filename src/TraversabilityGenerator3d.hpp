@@ -76,8 +76,8 @@ protected:
     double computeSlope(const Eigen::Hyperplane< double, int(3) >& plane) const;
     Eigen::Vector3d computeSlopeDirection(const Eigen::Hyperplane< double, int(3) >& plane) const;
     
-    bool checkStepHeight(TravGenNode* node);
-    bool checkStepHeightOnSlope(TravGenNode* node);
+    bool checkStepHeightAABB(TravGenNode* node);
+    bool checkStepHeightOBB(TravGenNode* node);
     
     /** @return false if no allowed orientation was found (e.g. due to extreme slope)*/
     bool computeAllowedOrientations(TravGenNode* node);
