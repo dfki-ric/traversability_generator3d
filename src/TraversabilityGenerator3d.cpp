@@ -9,53 +9,6 @@
 #include <deque>
 using namespace maps::grid;
 
-
-// Function to create a rotation transformation around an arbitrary axis
-Transformation create_rotation_transformation(const Vector_3& current_up, const Vector_3& target_normal) {
-    // Normalize vectors
-    Vector_3 current_up_normalized = current_up / std::sqrt(current_up.squared_length());
-    Vector_3 target_normal_normalized = target_normal / std::sqrt(target_normal.squared_length());
-
-    // Calculate the rotation axis and check for zero-length (parallel vectors)
-    Vector_3 rotation_axis = CGAL::cross_product(current_up_normalized, target_normal_normalized);
-    double axis_length = std::sqrt(rotation_axis.squared_length());
-    if (axis_length == 0) {
-        // If the axis length is zero, the vectors are already aligned; no rotation needed.
-        return Transformation(CGAL::IDENTITY);
-    }
-
-    // Normalize the rotation axis
-    rotation_axis = rotation_axis / axis_length;
-
-    // Calculate the angle using the dot product
-    double dot_product = current_up_normalized * target_normal_normalized;
-    double angle = std::acos(dot_product); // Angle in radians
-
-    // Create the rotation matrix elements
-    double cos_theta = std::cos(angle);
-    double sin_theta = std::sin(angle);
-    double u = rotation_axis.x(), v = rotation_axis.y(), w = rotation_axis.z();
-
-    // Rotation matrix based on Rodrigues' rotation formula
-    double r00 = cos_theta + u * u * (1 - cos_theta);
-    double r01 = u * v * (1 - cos_theta) - w * sin_theta;
-    double r02 = u * w * (1 - cos_theta) + v * sin_theta;
-    double r10 = v * u * (1 - cos_theta) + w * sin_theta;
-    double r11 = cos_theta + v * v * (1 - cos_theta);
-    double r12 = v * w * (1 - cos_theta) - u * sin_theta;
-    double r20 = w * u * (1 - cos_theta) - v * sin_theta;
-    double r21 = w * v * (1 - cos_theta) + u * sin_theta;
-    double r22 = cos_theta + w * w * (1 - cos_theta);
-
-    // Create the rotation transformation using the matrix
-    Transformation rotation(r00, r01, r02, 0,
-                            r10, r11, r12, 0,
-                            r20, r21, r22, 0);
-
-    return rotation;
-}
-
-
 namespace traversability_generator3d
 {
 
@@ -128,12 +81,16 @@ void TraversabilityGenerator3d::transformPolyhedron(Polyhedron_3& polyhedron, co
 
 Transformation TraversabilityGenerator3d::generateTransform(const Eigen::Vector3d& normal, const Eigen::Vector3d& translation){
 
-    Vector_3 current_up(0, 0, 1);
-    Vector_3 patch_normal(normal.x(), normal.y(), normal.z());
+    Eigen::Vector3d current_up(0, 0, 1);
+    Eigen::Quaterniond rotation_quaternion = Eigen::Quaterniond::FromTwoVectors(current_up, normal);
 
-    // Create the rotation transformation
-    Transformation rotate = create_rotation_transformation(current_up, patch_normal);
+    Eigen::Matrix3d rotation_matrix = rotation_quaternion.toRotationMatrix();
 
+    Transformation rotate(
+        rotation_matrix(0, 0), rotation_matrix(0, 1), rotation_matrix(0, 2), 0,
+        rotation_matrix(1, 0), rotation_matrix(1, 1), rotation_matrix(1, 2), 0,
+        rotation_matrix(2, 0), rotation_matrix(2, 1), rotation_matrix(2, 2), 0
+    );
     Vector_3 translation_vector(translation.x(), translation.y(), translation.z());
     Transformation translate(CGAL::TRANSLATION, translation_vector);
 
@@ -475,6 +432,89 @@ void TraversabilityGenerator3d::drawWireFrameBox(const Eigen::Vector3d& normal, 
 }
 
 bool TraversabilityGenerator3d::checkStepHeight(TravGenNode *node)
+{
+
+    /** What this method does:
+     * Check if any of the patches around @p node that the robot might stand on is higher than stepHeight.
+     * I.e. if any of the patches is so high that it would be inside the robots body.
+     */
+
+    Eigen::Vector3d nodePos;
+    if(!trMap.fromGrid(node->getIndex(), nodePos))
+    {
+        LOG_INFO_S << "TraversabilityGenerator3d: Internal error node out of grid";
+        return false;
+    }
+    nodePos.z() += node->getHeight();
+
+    const double smallerRobotSize = std::min(config.robotSizeX, config.robotSizeY);
+    const double growSize = smallerRobotSize / 2.0 + 1e-5;
+
+    Eigen::Vector3d min(-growSize, -growSize, 0);
+    Eigen::Vector3d max(-min);
+    max.z() = config.robotHeight;
+
+    min += nodePos;
+    max += nodePos;
+
+    const Eigen::AlignedBox3d limitBox(min, max);
+    View area = mlsGrid->intersectCuboid(limitBox);
+
+    const Eigen::Hyperplane<double, 3> &plane(node->getUserData().plane);
+
+    Index minIdx;
+    Index maxIdx;
+
+
+    if(!mlsGrid->toGrid(limitBox.min(), minIdx))
+    {
+        //when the robot bounding box leaves the map this patch cannot be traversable
+        return false;
+    }
+    if(!mlsGrid->toGrid(limitBox.max(), maxIdx))
+    {
+        //when the robot bounding box leaves the map this patch cannot be traversable
+        return false;
+    }
+
+    Index curIndex = minIdx;
+    Index areaSize(maxIdx-minIdx);
+
+    //the robot size has been set to a value smaller than one cell. Thus we cannot check anything.
+    if(area.getNumCells().y() <= 0 || area.getNumCells().x() <= 0)
+        return true;
+
+    //intersectCuboid returns an area that is one patch bigger than requested. I.e.
+    //it interpretes both min and max as inclusive. However, we consider max to be exclusive and
+    //thus reduce the cell count by one
+    for(size_t y = 0; y < area.getNumCells().y() - 1; y++, curIndex.y() += 1)
+    {
+        curIndex.x() = minIdx.x();
+        for(size_t x = 0; x < area.getNumCells().x() - 1; x++, curIndex.x() += 1)
+        {
+            Eigen::Vector3d pos;
+            if(!area.fromGrid(Index(x,y), pos))
+            {
+                LOG_INFO_S << "this should never happen";
+            }
+
+            for(const SurfacePatch<MLSConfig::SLOPE> *p : area.at(x, y))
+            {
+                pos.z() = (p->getTop()+p->getBottom())/2.;
+                float dist = plane.absDistance(pos);
+                //bounding box already checks height of robot
+                if(dist > config.maxStepHeight)
+                {
+                    return false;
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+bool TraversabilityGenerator3d::checkStepHeightOnSlope(TravGenNode *node)
 {
 
     /** What this method does:
@@ -909,11 +949,14 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
 
     if(!checkStepHeight(node))
     {
-        node->setType(TraversabilityNodeBase::OBSTACLE);
-        obstacleNodesGrowList.push_back(node);
-        return false;
-    }
-
+        if(!checkStepHeightOnSlope(node))
+        {
+            node->setType(TraversabilityNodeBase::OBSTACLE);
+            obstacleNodesGrowList.push_back(node);
+            return false;
+        }
+    } 
+    
     if(config.enableInclineLimitting)
     {
         if(!computeAllowedOrientations(node))
