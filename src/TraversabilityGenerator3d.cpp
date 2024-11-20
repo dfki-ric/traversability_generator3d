@@ -130,7 +130,7 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
     Eigen::Vector3d nodePos;
     if(!trMap.fromGrid(node.getIndex(), nodePos, node.getHeight()))
     {
-        LOG_INFO_S << "TraversabilityGenerator3d: Internal error node out of grid";
+        LOG_ERROR_S << "TraversabilityGenerator3d: Internal error node out of grid";
         return false;
     }
 
@@ -182,14 +182,15 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
     if(patchCnt < 5)
     {
         //ransac will not produce a result below 5 points
-//         LOG_INFO_S << "ransac fail: patchCnt < 5"l;
+        LOG_DEBUG_S << "Failed to fit plane using RANSAC because patchCnt < 5";
         return false;
     }
 
     //filter out to sparse areas
     if(patchCnt < patchCntTotal * config.minTraversablePercentage)
     {
-//         LOG_INFO_S << "TraversabilityGenerator3d::computePlaneRansac : not enough known patches : patchCnt " << patchCnt << " patchCntTotal " << patchCntTotal << " val " << patchCntTotal * config.minTraversablePercentagel;
+        LOG_DEBUG_S << "TraversabilityGenerator3d::computePlaneRansac : not enough known patches : patchCnt " << patchCnt 
+                    << " patchCntTotal " << patchCntTotal << " val " << patchCntTotal * config.minTraversablePercentage;
         return false;
     }
 
@@ -213,7 +214,7 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
     seg.segment (inliers, coefficients);
     if (inliers.indices.size () <= 5)
     {
-//         LOG_INFO_S << "ransac fail: inliers->indices.size () <= 5"l;
+        LOG_DEBUG_S << "RANSAC Failed: inliers->indices.size () <= 5";
         return false;
     }
 
@@ -230,7 +231,7 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
 
     if(newPos.x() > 0.0001 || newPos.y() > 0.0001)
     {
-        LOG_INFO_S << "TraversabilityGenerator3d: Error, adjustement height calculation is weird";
+        LOG_ERROR_S << "TraversabilityGenerator3d: Error, adjustement height calculation is weird";
         return false;
     }
 
@@ -495,7 +496,7 @@ bool TraversabilityGenerator3d::checkStepHeightAABB(TravGenNode *node)
             Eigen::Vector3d pos;
             if(!area.fromGrid(Index(x,y), pos))
             {
-                LOG_INFO_S << "this should never happen";
+                LOG_ERROR_S << "Intersected area with MLS is invalid. This should never happen!";
             }
 
             for(const SurfacePatch<MLSConfig::SLOPE> *p : area.at(x, y))
@@ -735,7 +736,7 @@ void TraversabilityGenerator3d::expandAll(TravGenNode* startNode, const double e
 
         if((cnd % 1000) == 0)
         {
-            LOG_INFO_S << "Expanded " << cnd << " nodes";
+            LOG_DEBUG_S << "Expanded " << cnd << " nodes";
         }
 
         if(!expandNode(node))
@@ -767,7 +768,7 @@ void TraversabilityGenerator3d::expandAll(TravGenNode* startNode, const double e
     //grow obstacle nodes
     inflateObstacles();
 
-    LOG_INFO_S << "Expanded " << cnd << " nodes";
+    LOG_DEBUG_S << "Expanded " << cnd << " nodes";
 }
 
 void TraversabilityGenerator3d::inflateObstacles()
@@ -804,7 +805,7 @@ void TraversabilityGenerator3d::addInitialPatchToMLS()
         return;
 
 
-    LOG_INFO_S << "Adding Initial Patch";
+    LOG_DEBUG_S << "Adding Initial Patch";
     const Vector2d res = mlsGrid->getResolution();
 
 //         const double sizeHalfX = config.robotSizeX / 2.0;
@@ -827,7 +828,7 @@ void TraversabilityGenerator3d::addInitialPatchToMLS()
             Index idx;
             if(!mlsGrid->toGrid(posMLS, idx))
             {
-                LOG_INFO_S << "Something is wrong, initial position is outside of MLS !";
+                LOG_ERROR_S << "Something is wrong, initial position is outside of MLS !";
                 continue;
             }
 
@@ -839,7 +840,6 @@ void TraversabilityGenerator3d::addInitialPatchToMLS()
                 if(p.isCovered(posMLS.z(), 0.05))
                 {
                     hasPatch = true;
-//                     LOG_INFO_S << "Found Patch at " << posMLS.transpose();
                     break;
                 }
             }
@@ -848,8 +848,6 @@ void TraversabilityGenerator3d::addInitialPatchToMLS()
                 continue;
 
             MLGrid::PatchType newPatch(posMLS.cast<float>(), config.initialPatchVariance);
-//             LOG_INFO_S << "Adding Patch at " << posMLS.transpose();
-
             ll.insert(newPatch);
         }
     }
@@ -866,12 +864,12 @@ void TraversabilityGenerator3d::setMLSGrid(std::shared_ptr< traversability_gener
         addInitialPatch = false;
     }
 
-    LOG_INFO_S << "Grid has size " << grid->getSize().transpose() << " resolution " << grid->getResolution().transpose();
-    LOG_INFO_S << "Internal resolution is " << trMap.getResolution().transpose();
+    LOG_DEBUG_S << "Grid has size " << grid->getSize().transpose() << " resolution " << grid->getResolution().transpose();
+    LOG_DEBUG_S << "Internal resolution is " << trMap.getResolution().transpose();
     Vector2d newSize = grid->getSize().array() / trMap.getResolution().array();
-    LOG_INFO_S << "MLS was set " << grid->getResolution().transpose() << " " << mlsGrid->getResolution().transpose();
+    LOG_DEBUG_S << "MLS was set " << grid->getResolution().transpose() << " " << mlsGrid->getResolution().transpose();
 
-    LOG_INFO_S << "New Size is " << newSize.transpose();
+    LOG_DEBUG_S << "New Size is " << newSize.transpose();
 
     trMap.extend(Vector2ui(newSize.x(), newSize.y()));
 
@@ -898,7 +896,7 @@ TravGenNode* TraversabilityGenerator3d::generateStartNode(const Eigen::Vector3d&
     Index idx;
     if(!trMap.toGrid(startPos, idx))
     {
-        LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Start position outside of map !";
+        LOG_ERROR_S << "TraversabilityGenerator3d::generateStartNode: Start position outside of map !";
         return nullptr;
     }
 
@@ -906,21 +904,21 @@ TravGenNode* TraversabilityGenerator3d::generateStartNode(const Eigen::Vector3d&
     TravGenNode *startNode = findMatchingTraversabilityPatchAt(idx, startPos.z());
     if(startNode)
     {
-        LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Using existing node ";
+        LOG_DEBUG_S << "TraversabilityGenerator3d::generateStartNode: Using existing node ";
         return startNode;
     }
 
     startNode = createTraversabilityPatchAt(idx, startPos.z());
     if(!startNode)
     {
-        LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Could not create travNode for given start position, no matching / not enough MLS patches";
+        LOG_ERROR_S << "TraversabilityGenerator3d::generateStartNode: Could not create travNode for given start position, no matching / not enough MLS patches";
         return startNode;
     }
 
     if(startNode->isExpanded() && startNode->getType() != TraversabilityNodeBase::TRAVERSABLE)
     {
-        LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Position is on unknow patch ! ";
-        LOG_INFO_S << "type is: " << startNode->getType();
+        LOG_ERROR_S << "TraversabilityGenerator3d::generateStartNode: Position is on non traversable patch!";
+        LOG_ERROR_S << "Type of start patch is: " << startNode->getType();
     }
 
     return startNode;
@@ -1138,7 +1136,7 @@ void TraversabilityGenerator3d::addConnectedPatches(TravGenNode *  node)
 
         if(!newPos.allFinite())
         {
-            LOG_INFO_S << "newPos contains inf";
+            LOG_ERROR_S << "newPos contains inf values";
             continue;
         }
 
