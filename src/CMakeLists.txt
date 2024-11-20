@@ -16,6 +16,6 @@ rock_library(traversability_generator3d
         maps
         pcl_segmentation${PCL_VERSION_SUFFIX}
         vizkit3d_debug_drawings-commands
-    DEPS 
+    DEPS_TARGET
         CGAL::CGAL
 )
