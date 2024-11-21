@@ -12,7 +12,7 @@
 #include <CGAL/Polygon_mesh_processing/intersection.h>
 #include <CGAL/Homogeneous.h>
 #include <CGAL/Aff_transformation_3.h>
-#include <cmath> // for trigonometric functions
+#include <cmath>
 
 #ifdef CGAL_USE_GMP
 #include <CGAL/Gmpz.h>
@@ -99,9 +99,7 @@ protected:
     TraversabilityConfig config;
     
     void addInitialPatchToMLS();
-    
-    int intersections();
-    
+        
 public:
     TraversabilityGenerator3d(const TraversabilityConfig &config);
 
@@ -119,7 +117,6 @@ public:
     void expandAll(const std::vector<Eigen::Vector3d>& positions);
     
     void expandAll(const Eigen::Vector3d &startPos);
-    
     
     /**Expands the map starting at @p startPos.
      * Expansion will stop if a distance of @p expandDist is reached. I.e. this will expand all nodes
@@ -139,11 +136,7 @@ public:
     int getNumNodes() const;
     
     const maps::grid::TraversabilityMap3d<TravGenNode *> &getTraversabilityMap() const;
-
         
     void setConfig(const TraversabilityConfig &config);
-
-
 };
-
 }
