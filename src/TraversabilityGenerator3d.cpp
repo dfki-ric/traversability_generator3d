@@ -12,64 +12,55 @@ using namespace maps::grid;
 namespace traversability_generator3d
 {
 
-TraversabilityGenerator3d::TraversabilityGenerator3d(const TraversabilityConfig& config) : addInitialPatch(false), config(config)
+TraversabilityGenerator3d::TraversabilityGenerator3d(const TraversabilityConfig& config) 
+    : addInitialPatch(false), config(config), patchHeight(0.02) // Set default patchHeight
 {
     trMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
 
-    // Assume center of robot at (0,0,0) for simplicity
-    double robothalflength = config.robotSizeX / 2.0;
-    double robothalfwidth = config.robotSizeY / 2.0;
-    double robothalfheight = config.robotHeight / 2.0;
+    double robotHalfLength = config.robotSizeX / 2.0;
+    double robotHalfWidth = config.robotSizeY / 2.0;
+    double robotHalfHeight = config.robotHeight / 2.0;
 
     robotEdges = {
-        {robothalflength, robothalfwidth, robothalfheight},   // Top right front
-        {robothalflength, robothalfwidth, -robothalfheight},  // Top right back
-        {robothalflength, -robothalfwidth, robothalfheight},  // Bottom right front
-        {robothalflength, -robothalfwidth, -robothalfheight}, // Bottom right back
-        {-robothalflength, robothalfwidth, robothalfheight},  // Top left front
-        {-robothalflength, robothalfwidth, -robothalfheight}, // Top left back
-        {-robothalflength, -robothalfwidth, robothalfheight}, // Bottom left front
-        {-robothalflength, -robothalfwidth, -robothalfheight} // Bottom left back
+        {robotHalfLength, robotHalfWidth, robotHalfHeight},    // Top-right-front
+        {robotHalfLength, robotHalfWidth, -robotHalfHeight},   // Top-right-back
+        {robotHalfLength, -robotHalfWidth, robotHalfHeight},   // Bottom-right-front
+        {robotHalfLength, -robotHalfWidth, -robotHalfHeight},  // Bottom-right-back
+        {-robotHalfLength, robotHalfWidth, robotHalfHeight},   // Top-left-front
+        {-robotHalfLength, robotHalfWidth, -robotHalfHeight},  // Top-left-back
+        {-robotHalfLength, -robotHalfWidth, robotHalfHeight},  // Bottom-left-front
+        {-robotHalfLength, -robotHalfWidth, -robotHalfHeight}  // Bottom-left-back
     };
 
     robotPolyhedron = generatePolyhedron(robotEdges);
 
-
-    // Assume center of robot at (0,0,0) for simplicity
-    double patchhalflength = config.gridResolution/2;
-    double patchhalfwidth = config.gridResolution/2;
-
-    //TODO: Hardcoded for now!
-    patchheight = 0.02;
-
-    double patchhalfheight = patchheight/2;
+    double patchHalfLength = config.gridResolution / 2.0;
+    double patchHalfWidth = config.gridResolution / 2.0;
+    double patchHalfHeight = patchHeight / 2.0;
 
     patchEdges = {
-        {patchhalflength, patchhalfwidth, patchhalfheight},   // Top right front
-        {patchhalflength, patchhalfwidth, -patchhalfheight},  // Top right back
-        {patchhalflength, -patchhalfwidth, patchhalfheight},  // Bottom right front
-        {patchhalflength, -patchhalfwidth, -patchhalfheight}, // Bottom right back
-        {-patchhalflength, patchhalfwidth, patchhalfheight},  // Top left front
-        {-patchhalflength, patchhalfwidth, -patchhalfheight}, // Top left back
-        {-patchhalflength, -patchhalfwidth, patchhalfheight}, // Bottom left front
-        {-patchhalflength, -patchhalfwidth, -patchhalfheight} // Bottom left back
+        {patchHalfLength, patchHalfWidth, patchHalfHeight},    // Top-right-front
+        {patchHalfLength, patchHalfWidth, -patchHalfHeight},   // Top-right-back
+        {patchHalfLength, -patchHalfWidth, patchHalfHeight},   // Bottom-right-front
+        {patchHalfLength, -patchHalfWidth, -patchHalfHeight},  // Bottom-right-back
+        {-patchHalfLength, patchHalfWidth, patchHalfHeight},   // Top-left-front
+        {-patchHalfLength, patchHalfWidth, -patchHalfHeight},  // Top-left-back
+        {-patchHalfLength, -patchHalfWidth, patchHalfHeight},  // Bottom-left-front
+        {-patchHalfLength, -patchHalfWidth, -patchHalfHeight}  // Bottom-left-back
     };
 
     patchPolyhedron = generatePolyhedron(patchEdges);
 }
 
-Polyhedron_3 TraversabilityGenerator3d::generatePolyhedron(std::vector<Eigen::Vector3d> points){
-    std::vector<Point_3> cgal_p3;   
+Polyhedron_3 TraversabilityGenerator3d::generatePolyhedron(const std::vector<Eigen::Vector3d>& points) {
+    std::vector<Point_3> cgal_p3;
+    cgal_p3.reserve(points.size());
 
-    for (auto it = points.cbegin(); it != points.cend(); ++it){
-        Point_3 p(it->x(), it->y(), it->z());
-        cgal_p3.push_back(p);
-    }
-    
-    CGAL::Object ch_object;
-    CGAL::convex_hull_3(cgal_p3.begin(), cgal_p3.end(), ch_object);
+    std::transform(points.begin(), points.end(), std::back_inserter(cgal_p3),
+                   [](const Eigen::Vector3d& v) { return Point_3(v.x(), v.y(), v.z()); });
+
     Polyhedron_3 polyhedron;
-    CGAL::assign (polyhedron, ch_object);
+    CGAL::convex_hull_3(cgal_p3.begin(), cgal_p3.end(), polyhedron);
 
     return polyhedron;
 }
@@ -614,7 +605,7 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
                     {
                         V3DD::DRAW_WIREFRAME_BOX("traversability_generator3d_trav_obstacle_check_box", robotCenterPos, robotOrientation, robotSize, V3DD::Color::red);
                     });
-                    Eigen::Vector3d patchSize{config.gridResolution, config.gridResolution, patchheight};
+                    Eigen::Vector3d patchSize{config.gridResolution, config.gridResolution, patchHeight};
                     Eigen::Vector3f normalf = p->getNormal(); 
                     Eigen::Vector3d normal{normalf.x(), normalf.y(), normalf.z()};
                     drawWireFrameBox(normal,pos,patchSize,V3DD::Color::blue);

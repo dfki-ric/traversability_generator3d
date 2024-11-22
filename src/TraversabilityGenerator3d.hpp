@@ -53,9 +53,9 @@ protected:
 
     std::vector<Eigen::Vector3d> patchEdges;
     Polyhedron_3 patchPolyhedron;
-    double patchheight;
+    double patchHeight;
 
-    Polyhedron_3 generatePolyhedron(std::vector<Eigen::Vector3d> points);
+    Polyhedron_3 generatePolyhedron(const std::vector<Eigen::Vector3d>& points);
     void transformPolyhedron(Polyhedron_3& polyhedron, const Transformation& transform);
     Transformation generateTransform(const Eigen::Vector3d& normal, const Eigen::Vector3d& translation);
     Polyhedron_3 createPolyhedronFromSurfacePatch(const maps::grid::SurfacePatch<maps::grid::MLSConfig::SLOPE> *p, const Eigen::Vector3d& position);
