@@ -19,6 +19,87 @@ TraversabilityGenerator3d::TraversabilityGenerator3d(const TraversabilityConfig&
 {
     trMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
     soilMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
+
+    // Assume center of robot at (0,0,0) for simplicity
+    double robothalflength = config.robotSizeX / 2.0;
+    double robothalfwidth = config.robotSizeY / 2.0;
+    double robothalfheight = config.robotHeight / 2.0;
+
+    robotEdges = {
+        {robothalflength, robothalfwidth, robothalfheight},   // Top right front
+        {robothalflength, robothalfwidth, -robothalfheight},  // Top right back
+        {robothalflength, -robothalfwidth, robothalfheight},  // Bottom right front
+        {robothalflength, -robothalfwidth, -robothalfheight}, // Bottom right back
+        {-robothalflength, robothalfwidth, robothalfheight},  // Top left front
+        {-robothalflength, robothalfwidth, -robothalfheight}, // Top left back
+        {-robothalflength, -robothalfwidth, robothalfheight}, // Bottom left front
+        {-robothalflength, -robothalfwidth, -robothalfheight} // Bottom left back
+    };
+
+    robotPolyhedron = generatePolyhedron(robotEdges);
+
+
+    // Assume center of robot at (0,0,0) for simplicity
+    double patchhalflength = config.gridResolution/2;
+    double patchhalfwidth = config.gridResolution/2;
+
+    //TODO: Hardcoded for now!
+    patchheight = 0.02;
+
+    double patchhalfheight = patchheight/2;
+
+    patchEdges = {
+        {patchhalflength, patchhalfwidth, patchhalfheight},   // Top right front
+        {patchhalflength, patchhalfwidth, -patchhalfheight},  // Top right back
+        {patchhalflength, -patchhalfwidth, patchhalfheight},  // Bottom right front
+        {patchhalflength, -patchhalfwidth, -patchhalfheight}, // Bottom right back
+        {-patchhalflength, patchhalfwidth, patchhalfheight},  // Top left front
+        {-patchhalflength, patchhalfwidth, -patchhalfheight}, // Top left back
+        {-patchhalflength, -patchhalfwidth, patchhalfheight}, // Bottom left front
+        {-patchhalflength, -patchhalfwidth, -patchhalfheight} // Bottom left back
+    };
+
+    patchPolyhedron = generatePolyhedron(patchEdges);
+}
+
+Polyhedron_3 TraversabilityGenerator3d::generatePolyhedron(std::vector<Eigen::Vector3d> points){
+    std::vector<Point_3> cgal_p3;   
+
+    for (auto it = points.cbegin(); it != points.cend(); ++it){
+        Point_3 p(it->x(), it->y(), it->z());
+        cgal_p3.push_back(p);
+    }
+    
+    CGAL::Object ch_object;
+    CGAL::convex_hull_3(cgal_p3.begin(), cgal_p3.end(), ch_object);
+    Polyhedron_3 polyhedron;
+    CGAL::assign (polyhedron, ch_object);
+
+    return polyhedron;
+}
+
+void TraversabilityGenerator3d::transformPolyhedron(Polyhedron_3& polyhedron, const Transformation& transform){
+    // Apply the combined transformation to each point in the polyhedron
+    std::transform(polyhedron.points_begin(), polyhedron.points_end(), polyhedron.points_begin(), transform);
+}
+
+Transformation TraversabilityGenerator3d::generateTransform(const Eigen::Vector3d& normal, const Eigen::Vector3d& translation){
+
+    Eigen::Vector3d current_up(0, 0, 1);
+    Eigen::Quaterniond rotation_quaternion = Eigen::Quaterniond::FromTwoVectors(current_up, normal);
+
+    Eigen::Matrix3d rotation_matrix = rotation_quaternion.toRotationMatrix();
+
+    Transformation rotate(
+        rotation_matrix(0, 0), rotation_matrix(0, 1), rotation_matrix(0, 2), 0,
+        rotation_matrix(1, 0), rotation_matrix(1, 1), rotation_matrix(1, 2), 0,
+        rotation_matrix(2, 0), rotation_matrix(2, 1), rotation_matrix(2, 2), 0
+    );
+    Vector_3 translation_vector(translation.x(), translation.y(), translation.z());
+    Transformation translate(CGAL::TRANSLATION, translation_vector);
+
+    Transformation combined = translate * rotate;
+    return combined;    
 }
 
 TraversabilityGenerator3d::~TraversabilityGenerator3d()
@@ -59,7 +140,7 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
     Eigen::Vector3d nodePos;
     if(!trMap.fromGrid(node.getIndex(), nodePos, node.getHeight()))
     {
-        LOG_INFO_S << "TraversabilityGenerator3d: Internal error node out of grid";
+        LOG_ERROR_S << "TraversabilityGenerator3d: Internal error node out of grid";
         return false;
     }
 
@@ -111,14 +192,15 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
     if(patchCnt < 5)
     {
         //ransac will not produce a result below 5 points
-//         LOG_INFO_S << "ransac fail: patchCnt < 5"l;
+        LOG_DEBUG_S << "Failed to fit plane using RANSAC because patchCnt < 5";
         return false;
     }
 
     //filter out to sparse areas
     if(patchCnt < patchCntTotal * config.minTraversablePercentage)
     {
-//         LOG_INFO_S << "TraversabilityGenerator3d::computePlaneRansac : not enough known patches : patchCnt " << patchCnt << " patchCntTotal " << patchCntTotal << " val " << patchCntTotal * config.minTraversablePercentagel;
+        LOG_DEBUG_S << "TraversabilityGenerator3d::computePlaneRansac : not enough known patches : patchCnt " << patchCnt 
+                    << " patchCntTotal " << patchCntTotal << " val " << patchCntTotal * config.minTraversablePercentage;
         return false;
     }
 
@@ -142,7 +224,7 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
     seg.segment (inliers, coefficients);
     if (inliers.indices.size () <= 5)
     {
-//         LOG_INFO_S << "ransac fail: inliers->indices.size () <= 5"l;
+        LOG_DEBUG_S << "RANSAC Failed: inliers->indices.size () <= 5";
         return false;
     }
 
@@ -159,7 +241,7 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
 
     if(newPos.x() > 0.0001 || newPos.y() > 0.0001)
     {
-        LOG_INFO_S << "TraversabilityGenerator3d: Error, adjustement height calculation is weird";
+        LOG_ERROR_S << "TraversabilityGenerator3d: Error, adjustement height calculation is weird";
         return false;
     }
 
@@ -173,12 +255,14 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
     node.getUserData().slopeDirection = slopeDir;
     node.getUserData().slopeDirectionAtan2 = std::atan2(slopeDir.y(), slopeDir.x());
 
-//     COMPLEX_DRAWING(
-//         Eigen::Vector3d pos(node.getIndex().x() * config.gridResolution, node.getIndex().y() * config.gridResolution, node.getHeight());
-//         pos = getTraversabilityMap().getLocalFrame().inverse(Eigen::Isometry) * pos;
-//         pos.z() += 0.06;
-//         DRAW_TEXT("slope", pos, std::to_string(node.getUserData().slope), 0.01, V3DD::Color::red);
-//     );
+//#ifdef ENABLE_DEBUG_DRAWINGS
+//    V3DD::COMPLEX_DRAWING([&]()
+//    {    Eigen::Vector3d pos(node.getIndex().x() * config.gridResolution, node.getIndex().y() * config.gridResolution, node.getHeight());
+//        pos = getTraversabilityMap().getLocalFrame().inverse(Eigen::Isometry) * pos;
+//        pos.z() += 0.06;
+//        V3DD::DRAW_TEXT("slope", pos, std::to_string(node.getUserData().slope), 0.01, V3DD::Color::red);
+//    });
+//#endif
 
     return true;
 }
@@ -209,49 +293,47 @@ bool TraversabilityGenerator3d::computeAllowedOrientations(TravGenNode* node)
         //add forward allowed angles
         node->getUserData().allowedOrientations.emplace_back(base::Angle::fromRad(startRad), width);
 
-//         V3DD::COMPLEX_DRAWING([&]()
-//         {
-//             Eigen::Vector3d patchPos(node->getIndex().x() * config.gridResolution, node->getIndex().y() * config.gridResolution, node->getHeight());
-//             patchPos.x() += config.gridResolution / 2.0;
-//             patchPos.y() += config.gridResolution / 2.0;
-//             patchPos = getTraversabilityMap().getLocalFrame().inverse(Eigen::Isometry) * patchPos;
-//             patchPos.z() += 0.06;
-//
-//             Eigen::AngleAxisd rot1(node->getUserData().allowedOrientations.back().getStart().getRad(), Eigen::Vector3d::UnitZ());
-//             Eigen::AngleAxisd rot2(node->getUserData().allowedOrientations.back().getEnd().getRad(), Eigen::Vector3d::UnitZ());
-//
-//             Eigen::Vector3d end1 = rot1 * Eigen::Vector3d(0.1, 0, 0);
-//             Eigen::Vector3d end2 = rot2 * Eigen::Vector3d(0.1, 0, 0);
-//
-//             V3DD::DRAW_LINE("traversability_generator3d_allowedAngles", patchPos, patchPos + end1, V3D:::Color::magenta);
-//             V3DD::DRAW_LINE("traversability_generator3d_allowedAngles", patchPos, patchPos + end2, V3DD::Color::magenta);
-//         });
+//#ifdef ENABLE_DEBUG_DRAWINGS
+//        V3DD::COMPLEX_DRAWING([&]()
+//        {
+//            Eigen::Vector3d patchPos(node->getIndex().x() * config.gridResolution, node->getIndex().y() * config.gridResolution, node->getHeight());
+//            patchPos.x() += config.gridResolution / 2.0;
+//            patchPos.y() += config.gridResolution / 2.0;
+//            patchPos = getTraversabilityMap().getLocalFrame().inverse(Eigen::Isometry) * patchPos;
+//            patchPos.z() += 0.06;
+//            Eigen::AngleAxisd rot1(node->getUserData().allowedOrientations.back().getStart().getRad(), Eigen::Vector3d::UnitZ());
+//            Eigen::AngleAxisd rot2(node->getUserData().allowedOrientations.back().getEnd().getRad(), Eigen::Vector3d::UnitZ());
+//            Eigen::Vector3d end1 = rot1 * Eigen::Vector3d(0.1, 0, 0);
+//            Eigen::Vector3d end2 = rot2 * Eigen::Vector3d(0.1, 0, 0);
+//            V3DD::DRAW_LINE("traversability_generator3d_allowedAngles", patchPos, patchPos + end1, V3DD::Color::magenta);
+//            V3DD::DRAW_LINE("traversability_generator3d_allowedAngles", patchPos, patchPos + end2, V3DD::Color::magenta);
+//        });
+//#endif
 
         //add backward allowed angles
         if(config.allowForwardDownhill)
         {
             node->getUserData().allowedOrientations.emplace_back(base::Angle::fromRad(startRad - M_PI), width);
 
-            // V3DD::COMPLEX_DRAWING([&]()
-            // {
-            //     Eigen::Vector3d patchPos(node->getIndex().x() * config.gridResolution, node->getIndex().y() * config.gridResolution, node->getHeight());
-            //     patchPos.x() += config.gridResolution / 2.0;
-            //     patchPos.y() += config.gridResolution / 2.0;
-            //     patchPos = getTraversabilityMap().getLocalFrame().inverse(Eigen::Isometry) * patchPos;
-            //     patchPos.z() += 0.06;
-            //
-            //     Eigen::AngleAxisd rot1(node->getUserData().allowedOrientations.back().getStart().getRad(), Eigen::Vector3d::UnitZ());
-            //     Eigen::AngleAxisd rot2(node->getUserData().allowedOrientations.back().getEnd().getRad(), Eigen::Vector3d::UnitZ());
-            //
-            //     Eigen::Vector3d end1 = rot1 * Eigen::Vector3d(0.1, 0, 0);
-            //     Eigen::Vector3d end2 = rot2 * Eigen::Vector3d(0.1, 0, 0);
-            //
-            //     V3DD::DRAW_LINE("traversability_generator3d_allowedAngles", patchPos, patchPos + end1, V3DD::Color::cyan);
-            //     V3DD::DRAW_LINE("traversability_generator3d_allowedAngles", patchPos, patchPos + end2, V3DD::Color::cyan);
-            // });
-
+//#ifdef ENABLE_DEBUG_DRAWINGS
+//        V3DD::COMPLEX_DRAWING([&]()
+//        {
+//            Eigen::Vector3d patchPos(node->getIndex().x() * config.gridResolution, node->getIndex().y() * config.gridResolution, node->getHeight());
+//            patchPos.x() += config.gridResolution / 2.0;
+//            patchPos.y() += config.gridResolution / 2.0;
+//            patchPos = getTraversabilityMap().getLocalFrame().inverse(Eigen::Isometry) * patchPos;
+//            patchPos.z() += 0.06;
+//            Eigen::AngleAxisd rot1(node->getUserData().allowedOrientations.back().getStart().getRad(), Eigen::Vector3d::UnitZ());
+//            Eigen::AngleAxisd rot2(node->getUserData().allowedOrientations.back().getEnd().getRad(), Eigen::Vector3d::UnitZ());
+        
+//             Eigen::Vector3d end1 = rot1 * Eigen::Vector3d(0.1, 0, 0);
+//             Eigen::Vector3d end2 = rot2 * Eigen::Vector3d(0.1, 0, 0);
+        
+//             V3DD::DRAW_LINE("traversability_generator3d_allowedAngles", patchPos, patchPos + end1, V3DD::Color::cyan);
+//             V3DD::DRAW_LINE("traversability_generator3d_allowedAngles", patchPos, patchPos + end2, V3DD::Color::cyan);
+//        });
+//#endif
         }
-
     }
 
     return true;
@@ -306,50 +388,67 @@ bool TraversabilityGenerator3d::checkForFrontier(const TravGenNode* node)
             }
             else
             {
+//#ifdef ENABLE_DEBUG_DRAWINGS
                 //Draw connection to found neighbor
-//                 COMPLEX_DRAWING(
-//                     Eigen::Vector3d neighborPos(neighbor->getIndex().x() * config.gridResolution, neighbor->getIndex().y() * config.gridResolution, neighbor->getHeight());
-//                     neighborPos.x() += config.gridResolution / 2.0;
-//                     neighborPos.y() += config.gridResolution / 2.0;
-//                     neighborPos = getTraversabilityMap().getLocalFrame().inverse(Eigen::Isometry) * neighborPos;
-//                     neighborPos.z() += 0.06;
-//                     Eigen::Vector3d pos(node->getIndex().x() * config.gridResolution, node->getIndex().y() * config.gridResolution, node->getHeight());
-//                     pos.x() += config.gridResolution / 2.0;
-//                     pos.y() += config.gridResolution / 2.0;
-//                     pos = getTraversabilityMap().getLocalFrame().inverse(Eigen::Isometry) * pos;
-//                     pos.z() += 0.06;
-//                     DRAW_LINE("neighbor connections", pos, neighborPos, V3DD::Color::magenta);
-//                 );
+//                V3DD::COMPLEX_DRAWING([&]()
+//                {
+//                    Eigen::Vector3d neighborPos(neighbor->getIndex().x() * config.gridResolution, neighbor->getIndex().y() * config.gridResolution, neighbor->getHeight());
+//                    neighborPos.x() += config.gridResolution / 2.0;
+//                    neighborPos.y() += config.gridResolution / 2.0;
+//                    neighborPos = getTraversabilityMap().getLocalFrame().inverse(Eigen::Isometry) * neighborPos;
+//                    neighborPos.z() += 0.06;
+//                    Eigen::Vector3d pos(node->getIndex().x() * config.gridResolution, node->getIndex().y() * config.gridResolution, node->getHeight());
+//                    pos.x() += config.gridResolution / 2.0;
+//                    pos.y() += config.gridResolution / 2.0;
+//                    pos = getTraversabilityMap().getLocalFrame().inverse(Eigen::Isometry) * pos;
+//                    pos.z() += 0.06;
+//                    V3DD::DRAW_LINE("neighbor connections", pos, neighborPos, V3DD::Color::magenta);
+//                });
+//#endif
             }
         }
     }
-
-//     COMPLEX_DRAWING(
-//         Eigen::Vector3d pos(node->getIndex().x() * config.gridResolution, node->getIndex().y() * config.gridResolution, node->getHeight());
-//         pos.x() += config.gridResolution / 2.0;
-//         pos.y() += config.gridResolution / 2.0;
-//         pos = getTraversabilityMap().getLocalFrame().inverse(Eigen::Isometry) * pos;
-//         pos.z() += 0.06;
-//         DRAW_TEXT("missingNeighboursCount", pos, std::to_string(missingNeighbors), 0.02, V3DD::Color::magenta);
-//     );
+//#ifdef ENABLE_DEBUG_DRAWINGS
+//    V3DD::COMPLEX_DRAWING([&]()
+//    {
+//        Eigen::Vector3d pos(node->getIndex().x() * config.gridResolution, node->getIndex().y() * config.gridResolution, node->getHeight());
+//        pos.x() += config.gridResolution / 2.0;
+//        pos.y() += config.gridResolution / 2.0;
+//        pos = getTraversabilityMap().getLocalFrame().inverse(Eigen::Isometry) * pos;
+//        pos.z() += 0.06;
+//        V3DD::DRAW_TEXT("missingNeighboursCount", pos, "Missing Neighbors", 0.02, V3DD::Color::magenta);
+//    });
+//#endif
     return false;
 }
 
-bool TraversabilityGenerator3d::checkStepHeight(TravGenNode *node)
+
+void TraversabilityGenerator3d::drawWireFrameBox(const Eigen::Vector3d& normal, const Eigen::Vector3d& position, const Eigen::Vector3d& size, const Eigen::Vector4d& colorRGBA){
+    Transformation transform = generateTransform(normal, position);
+
+    Eigen::Matrix3d rotation_matrix;
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            rotation_matrix(i, j) = transform.m(i, j); // Access rotation part of the matrix
+        }
+    }
+
+    Eigen::Quaterniond orientation(rotation_matrix);
+#ifdef ENABLE_DEBUG_DRAWINGS
+    V3DD::COMPLEX_DRAWING([&]
+    {
+        V3DD::DRAW_WIREFRAME_BOX("traversability_generator3d_mls_patch_box", position, orientation, size, colorRGBA);
+    });
+#endif
+}
+
+bool TraversabilityGenerator3d::checkStepHeightAABB(TravGenNode *node)
 {
 
     /** What this method does:
      * Check if any of the patches around @p node that the robot might stand on is higher than stepHeight.
      * I.e. if any of the patches is so high that it would be inside the robots body.
      */
-
-    const double slope = node->getUserData().slope;
-
-    if(slope > config.maxSlope)
-    {
-        return false;
-    }
-
 
     Eigen::Vector3d nodePos;
     if(!trMap.fromGrid(node->getIndex(), nodePos))
@@ -372,19 +471,7 @@ bool TraversabilityGenerator3d::checkStepHeight(TravGenNode *node)
     const Eigen::AlignedBox3d limitBox(min, max);
     View area = mlsGrid->intersectCuboid(limitBox);
 
-
-
-//     V3DD::COMPLEX_DRAWING([&]
-//     {
-//         static int i = 0;
-//         ++i;
-//         if((i % 30) == 0)
-//             V3DD::DRAW_AABB("traversability_generator3d_trav_obstacle_check_box", limitBox, V3DD::Color::red);
-//     });
-
-
     const Eigen::Hyperplane<double, 3> &plane(node->getUserData().plane);
-
 
     Index minIdx;
     Index maxIdx;
@@ -419,7 +506,7 @@ bool TraversabilityGenerator3d::checkStepHeight(TravGenNode *node)
             Eigen::Vector3d pos;
             if(!area.fromGrid(Index(x,y), pos))
             {
-                LOG_INFO_S << "this should never happen";
+                LOG_ERROR_S << "Intersected area with MLS is invalid. This should never happen!";
             }
 
             for(const SurfacePatch<MLSConfig::SLOPE> *p : area.at(x, y))
@@ -436,6 +523,132 @@ bool TraversabilityGenerator3d::checkStepHeight(TravGenNode *node)
     }
 
     return true;
+}
+
+bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
+{
+    /** What this method does:
+     * Check if any of the patches within the robot OBB
+     * @p node come into collison with the robot.
+     */
+
+    Eigen::Vector3d nodePos;
+    if(!trMap.fromGrid(node->getIndex(), nodePos))
+    {
+        LOG_INFO_S << "TraversabilityGenerator3d: Internal error node out of grid";
+        return false;
+    }
+    nodePos.z() += node->getHeight();
+
+    Eigen::Vector3d robotCenterPos = nodePos;
+    robotCenterPos.z() += config.maxStepHeight + config.robotHeight/2;
+
+    Transformation transform = generateTransform(node->getUserData().plane.normal(), robotCenterPos);
+    Polyhedron_3 robot = robotPolyhedron;
+    transformPolyhedron(robot,transform);
+
+    Eigen::Matrix3d rotation_matrix;
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            rotation_matrix(i, j) = transform.m(i, j); // Access rotation part of the matrix
+        }
+    }
+
+    Eigen::Quaterniond robotOrientation(rotation_matrix);
+    Eigen::Vector3d robotSize{config.robotSizeX, config.robotSizeY, config.robotHeight};
+
+
+    //TODO: Old code use for now to get the intersection with MLS
+    const double smallerRobotSize = std::min(config.robotSizeX, config.robotSizeY);
+    const double growSize = smallerRobotSize / 2.0 + 1e-5;
+
+    Eigen::Vector3d min(-growSize, -growSize, 0);
+    Eigen::Vector3d max(-min);
+    max.z() = config.robotHeight;
+
+    min += nodePos;
+    max += nodePos;
+
+    const Eigen::AlignedBox3d limitBox(min, max);
+    View area = mlsGrid->intersectCuboid(limitBox);
+
+    Index minIdx;
+    Index maxIdx;
+
+    if(!mlsGrid->toGrid(limitBox.min(), minIdx))
+    {
+        //when the robot bounding box leaves the map this patch cannot be traversable
+        return false;
+    }
+    if(!mlsGrid->toGrid(limitBox.max(), maxIdx))
+    {
+        //when the robot bounding box leaves the map this patch cannot be traversable
+        return false;
+    }
+
+    Index curIndex = minIdx;
+    Index areaSize(maxIdx-minIdx);
+
+    //the robot size has been set to a value smaller than one cell. Thus we cannot check anything.
+    if(area.getNumCells().y() <= 0 || area.getNumCells().x() <= 0)
+        return true;
+
+    //intersectCuboid returns an area that is one patch bigger than requested. I.e.
+    //it interpretes both min and max as inclusive. However, we consider max to be exclusive and
+    //thus reduce the cell count by one
+    for(size_t y = 0; y < area.getNumCells().y() - 1; y++, curIndex.y() += 1)
+    {
+        curIndex.x() = minIdx.x();
+        for(size_t x = 0; x < area.getNumCells().x() - 1; x++, curIndex.x() += 1)
+        {
+            Eigen::Vector3d pos;
+            if(!area.fromGrid(Index(x,y), pos))
+            {
+                LOG_INFO_S << "this should never happen";
+            }
+
+            //TODO: Fix the real cause of the offset!
+            pos.x() += nodePos.x() - 1.5 * config.gridResolution;
+            pos.y() += nodePos.y() - 1.5 * config.gridResolution;
+
+            for(const SurfacePatch<MLSConfig::SLOPE> *p : area.at(x, y))
+            {
+                Eigen::Vector3f surface(0,0,0);
+                pos.z() = p->getSurfacePos(surface);
+
+                Polyhedron_3 patch = createPolyhedronFromSurfacePatch(p,pos);
+                if(CGAL::Polygon_mesh_processing::do_intersect(patch,robot))
+                {
+#ifdef ENABLE_DEBUG_DRAWINGS
+                    V3DD::COMPLEX_DRAWING([&]
+                    {
+                        V3DD::DRAW_WIREFRAME_BOX("traversability_generator3d_trav_obstacle_check_box", robotCenterPos, robotOrientation, robotSize, V3DD::Color::red);
+                    });
+                    Eigen::Vector3d patchSize{config.gridResolution, config.gridResolution, patchheight};
+                    Eigen::Vector3f normalf = p->getNormal(); 
+                    Eigen::Vector3d normal{normalf.x(), normalf.y(), normalf.z()};
+                    drawWireFrameBox(normal,pos,patchSize,V3DD::Color::blue);
+#endif
+                    return false;
+                }
+            }
+        }
+    }
+
+    return true;
+    
+}
+
+Polyhedron_3 TraversabilityGenerator3d::createPolyhedronFromSurfacePatch(const SurfacePatch<MLSConfig::SLOPE> *p, const Eigen::Vector3d& position){
+
+    // Extract the normal and center of the surface patch
+    Eigen::Vector3f normalf = p->getNormal();  // Normal vector of the plane
+    Eigen::Vector3d normal{normalf.x(), normalf.y(), normalf.z()};
+
+    Polyhedron_3 patch = patchPolyhedron;
+    Transformation transform = generateTransform(normal, position);
+    transformPolyhedron(patch,transform);
+    return patch;
 }
 
 void TraversabilityGenerator3d::growNodes()
@@ -533,7 +746,7 @@ void TraversabilityGenerator3d::expandAll(TravGenNode* startNode, const double e
 
         if((cnd % 1000) == 0)
         {
-            LOG_INFO_S << "Expanded " << cnd << " nodes";
+            LOG_DEBUG_S << "Expanded " << cnd << " nodes";
         }
 
         if(!expandNode(node))
@@ -565,7 +778,7 @@ void TraversabilityGenerator3d::expandAll(TravGenNode* startNode, const double e
     //grow obstacle nodes
     inflateObstacles();
 
-    LOG_INFO_S << "Expanded " << cnd << " nodes";
+    LOG_DEBUG_S << "Expanded " << cnd << " nodes";
 }
 
 void TraversabilityGenerator3d::inflateObstacles()
@@ -602,7 +815,7 @@ void TraversabilityGenerator3d::addInitialPatchToMLS()
         return;
 
 
-    LOG_INFO_S << "Adding Initial Patch";
+    LOG_DEBUG_S << "Adding Initial Patch";
     const Vector2d res = mlsGrid->getResolution();
 
 //         const double sizeHalfX = config.robotSizeX / 2.0;
@@ -625,7 +838,7 @@ void TraversabilityGenerator3d::addInitialPatchToMLS()
             Index idx;
             if(!mlsGrid->toGrid(posMLS, idx))
             {
-                LOG_INFO_S << "Something is wrong, initial position is outside of MLS !";
+                LOG_ERROR_S << "Something is wrong, initial position is outside of MLS !";
                 continue;
             }
 
@@ -664,14 +877,15 @@ void TraversabilityGenerator3d::setMLSGrid(std::shared_ptr< traversability_gener
         addInitialPatch = false;
     }
 
-    LOG_INFO_S << "Grid has size " << grid->getSize().transpose() << " resolution " << grid->getResolution().transpose();
-    LOG_INFO_S << "Internal resolution is " << trMap.getResolution().transpose();
+    LOG_DEBUG_S << "Grid has size " << grid->getSize().transpose() << " resolution " << grid->getResolution().transpose();
+    LOG_DEBUG_S << "Internal resolution is " << trMap.getResolution().transpose();
     Vector2d newSize = grid->getSize().array() / trMap.getResolution().array();
-    LOG_INFO_S << "MLS was set " << grid->getResolution().transpose() << " " << mlsGrid->getResolution().transpose();
+    LOG_DEBUG_S << "MLS was set " << grid->getResolution().transpose() << " " << mlsGrid->getResolution().transpose();
 
-    LOG_INFO_S << "New Size is " << newSize.transpose();
+    LOG_DEBUG_S << "New Size is " << newSize.transpose();
 
     trMap.extend(Vector2ui(newSize.x(), newSize.y()));
+
     trMap.getLocalFrame() = mlsGrid->getLocalFrame();
 
     std::cout << "Adding Soil Map! " << std::endl;
@@ -717,8 +931,6 @@ void TraversabilityGenerator3d::setMLSGrid(std::shared_ptr< traversability_gener
     }
 
     clearTrMap();
-
-    std::cout << "Finished adding MLS! " << std::endl;
 }
 
 void TraversabilityGenerator3d::clearTrMap()
@@ -753,7 +965,7 @@ TravGenNode* TraversabilityGenerator3d::generateStartNode(const Eigen::Vector3d&
     Index idx;
     if(!trMap.toGrid(startPos, idx))
     {
-        LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Start position outside of map !";
+        LOG_ERROR_S << "TraversabilityGenerator3d::generateStartNode: Start position outside of map !";
         return nullptr;
     }
 
@@ -761,21 +973,21 @@ TravGenNode* TraversabilityGenerator3d::generateStartNode(const Eigen::Vector3d&
     TravGenNode *startNode = findMatchingTraversabilityPatchAt(idx, startPos.z());
     if(startNode)
     {
-        LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Using existing node ";
+        LOG_DEBUG_S << "TraversabilityGenerator3d::generateStartNode: Using existing node ";
         return startNode;
     }
 
     startNode = createTraversabilityPatchAt(idx, startPos.z());
     if(!startNode)
     {
-        LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Could not create travNode for given start position, no matching / not enough MLS patches";
+        LOG_ERROR_S << "TraversabilityGenerator3d::generateStartNode: Could not create travNode for given start position, no matching / not enough MLS patches";
         return startNode;
     }
 
     if(startNode->isExpanded() && startNode->getType() != TraversabilityNodeBase::TRAVERSABLE)
     {
-        LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Position is on unknow patch ! ";
-        LOG_INFO_S << "type is: " << startNode->getType();
+        LOG_ERROR_S << "TraversabilityGenerator3d::generateStartNode: Position is on non traversable patch!";
+        LOG_ERROR_S << "Type of start patch is: " << startNode->getType();
     }
 
     return startNode;
@@ -803,6 +1015,8 @@ SoilNode* TraversabilityGenerator3d::generateStartSoilNode(const Eigen::Vector3d
     {
         LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Could not create travNode for given start position, no matching / not enough MLS patches";
         return startNode;
+        LOG_ERROR_S << "TraversabilityGenerator3d::generateStartNode: Position is on non traversable patch!";
+        LOG_ERROR_S << "Type of start patch is: " << startNode->getType();
     }
 
     return startNode;
@@ -824,13 +1038,20 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
         return false;
     }
 
-    if(!checkStepHeight(node))
-    {
-        node->setType(TraversabilityNodeBase::OBSTACLE);
-        obstacleNodesGrowList.push_back(node);
+    if(node->getUserData().slope > config.maxSlope){
         return false;
     }
 
+    if(!checkStepHeightAABB(node))
+    {
+        if(!checkStepHeightOBB(node))
+        {
+            node->setType(TraversabilityNodeBase::OBSTACLE);
+            obstacleNodesGrowList.push_back(node);
+            return false;
+        }
+    } 
+    
     if(config.enableInclineLimitting)
     {
         if(!computeAllowedOrientations(node))
@@ -917,13 +1138,15 @@ TravGenNode *TraversabilityGenerator3d::createTraversabilityPatchAt(maps::grid::
         {
             //rare border case, ransac correction moved patch out of reachable height
         }
-
-//         COMPLEX_DRAWING(
-//             maps::grid::Vector3d pos(globalPos);
-//             trMap.fromGrid(idx, globalPos);
-//             pos.z() = height;
-//             DRAW_RING("neighbor patches", pos, mlsGrid->getResolution().x() / 2.0, 0.4, 0.01, V3DD::Color::blue);
-//         );
+//#ifdef ENABLE_DEBUG_DRAWINGS
+//        V3DD::COMPLEX_DRAWING([&]()
+//        {
+//            maps::grid::Vector3d pos(globalPos);
+//            trMap.fromGrid(idx, globalPos);
+//            pos.z() = height;
+//            V3DD::DRAW_RING("neighbor patches", pos, mlsGrid->getResolution().x() / 2.0, 0.4, 0.01, V3DD::Color::blue);
+//        });
+//#endif
     }
 
     ret->setHeight(curHeight);
@@ -995,12 +1218,14 @@ void TraversabilityGenerator3d::addConnectedPatches(TravGenNode *  node)
         //The new patch is not reachable from the current patch
         if(fabs(localHeight - curHeight) > config.maxStepHeight)
         {
-            // V3DD::COMPLEX_DRAWING([&]()
-            // {
-            //     maps::grid::Vector3d pos;
-            //     trMap.fromGrid(node->getIndex(), pos, node->getHeight(), false);
-            //     V3DD::DRAW_SPHERE("traversability_generator3d_expandFailStepHeight", pos, 0.05, V3DD::Color::carrot_orange);
-            // });
+//#ifdef ENABLE_DEBUG_DRAWINGS
+//            V3DD::COMPLEX_DRAWING([&]()
+//            {
+//                maps::grid::Vector3d pos;
+//                trMap.fromGrid(node->getIndex(), pos, node->getHeight(), false);
+//                V3DD::DRAW_SPHERE("traversability_generator3d_expandFailStepHeight", pos, 0.05, V3DD::Color::carrot_orange);
+//            });
+//#endif
             continue;
         }
 
@@ -1009,7 +1234,7 @@ void TraversabilityGenerator3d::addConnectedPatches(TravGenNode *  node)
 
         if(!newPos.allFinite())
         {
-            LOG_INFO_S << "newPos contains inf";
+            LOG_ERROR_S << "newPos contains inf values";
             continue;
         }
 
