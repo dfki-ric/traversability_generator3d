@@ -18,7 +18,7 @@ TraversabilityGenerator3d::TraversabilityGenerator3d(const TraversabilityConfig&
                                                                                            config(config)
 {
     trMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
-    soilMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
+    soilMap.setResolution(Eigen::Vector2d(0.1, 0.1));
 
     // Assume center of robot at (0,0,0) for simplicity
     double robothalflength = config.robotSizeX / 2.0;
@@ -888,41 +888,36 @@ void TraversabilityGenerator3d::setMLSGrid(std::shared_ptr< traversability_gener
 
     trMap.getLocalFrame() = mlsGrid->getLocalFrame();
 
-    std::cout << "Adding Soil Map! " << std::endl;
+    Vector2d newSizeSoilMap = grid->getSize().array() / soilMap.getResolution().array();
 
     if (!soilGridInitialized){
-        std::cout << "Initializing Soil Map! " << newSize.transpose() << std::endl;
-        soilMap.extend(Vector2ui(newSize.x(), newSize.y()));
+        soilMap.extend(Vector2ui(newSizeSoilMap.x(), newSizeSoilMap.y()));
         soilMap.getLocalFrame() = mlsGrid->getLocalFrame();   
         soilGridInitialized = true;
 
-        for (int x{0}; x < newSize.x()-1; ++x){
-            for (int y{0}; y < newSize.y()-1; ++y){
+        for (int x{0}; x < newSizeSoilMap.x()-1; ++x){
+            for (int y{0}; y < newSizeSoilMap.y()-1; ++y){
                 maps::grid::Index idx(x,y);
-                std::cout << "Index! " << idx.transpose() << std::endl;
                 //check if not already exists...
                 SoilNode *node = findMatchingSoilPatchAt(idx, 0);
                 if(node)
                 {
-                    LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Using existing node ";
+                    LOG_INFO_S << "TraversabilityGenerator3d::findMatchingSoilPatchAt: Using existing node ";
                     continue;
                 }
-                std::cout << "Adding Soil Patch! " << std::endl;
                 createSoilPatchAt(idx, 0);
-                std::cout << "Added Soil Patch! " << std::endl;
             }
         }
     }
     else{
-        soilMap.expandGrid(Vector2ui(newSize.x(), newSize.y()));
-        for (int x{0}; x < newSize.x(); ++x){
-            for (int y{0}; y < newSize.y(); ++y){
+        soilMap.expandGrid(Vector2ui(newSizeSoilMap.x(), newSizeSoilMap.y()));
+        for (int x{0}; x < newSizeSoilMap.x(); ++x){
+            for (int y{0}; y < newSizeSoilMap.y(); ++y){
                 maps::grid::Index idx(x,y);
                 //check if not already exists...
                 SoilNode *node = findMatchingSoilPatchAt(idx, 0);
                 if(node)
                 {
-                    LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Using existing node ";
                     continue;
                 }
                 createSoilPatchAt(idx, 0);
@@ -998,7 +993,7 @@ SoilNode* TraversabilityGenerator3d::generateStartSoilNode(const Eigen::Vector3d
     Index idx;
     if(!soilMap.toGrid(startPos, idx))
     {
-        LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Start position outside of map !";
+        LOG_INFO_S << "TraversabilityGenerator3d::generateStartSoilNode: Start position outside of map !";
         return nullptr;
     }
 
@@ -1006,17 +1001,15 @@ SoilNode* TraversabilityGenerator3d::generateStartSoilNode(const Eigen::Vector3d
     SoilNode *startNode = findMatchingSoilPatchAt(idx, 0);
     if(startNode)
     {
-        LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Using existing node ";
+        LOG_INFO_S << "TraversabilityGenerator3d::generateStartSoilNode: Using existing node ";
         return startNode;
     }
 
     startNode = createSoilPatchAt(idx, 0);
     if(!startNode)
     {
-        LOG_INFO_S << "TraversabilityGenerator3d::generateStartNode: Could not create travNode for given start position, no matching / not enough MLS patches";
+        LOG_INFO_S << "TraversabilityGenerator3d::generateStartSoilNode: Could not create Soil Node for given start position, no matching / not enough MLS patches";
         return startNode;
-        LOG_ERROR_S << "TraversabilityGenerator3d::generateStartNode: Position is on non traversable patch!";
-        LOG_ERROR_S << "Type of start patch is: " << startNode->getType();
     }
 
     return startNode;
@@ -1266,11 +1259,10 @@ SoilNode *TraversabilityGenerator3d::createSoilPatchAt(maps::grid::Index idx, co
     SoilNode *ret = nullptr;
 
     ret = new SoilNode(0.0, idx);
-    ret->getUserData().id = currentSoilNodeId++;
     ret->setHeight(curHeight);
     ret->setNotExpanded();
     ret->setType(TraversabilityNodeBase::UNSET);
-    ret->getUserData().soil_type = -1;
+    ret->getUserData().type = SoilType::UNKNOWN;
     soilMap.at(idx).insert(ret);
     return ret;
 }
@@ -1289,11 +1281,8 @@ SoilNode* TraversabilityGenerator3d::findMatchingSoilPatchAt(Index idx, const do
     return nullptr;
 }
 
-void TraversabilityGenerator3d::setSoilType(SoilNode * node, int soilType){
-
-    node->getUserData().soil_type = soilType;
-
-    switch(soilType)
+void TraversabilityGenerator3d::setSoilType(SoilNode * node, SoilType type){
+    switch(type)
     {
         //Just used to set the colors in the visualization for now
         //TODO: Need to use the GroundNode and its GROUNDTYPE in the SoilMap3dVisualization
@@ -1315,82 +1304,161 @@ void TraversabilityGenerator3d::setSoilType(SoilNode * node, int soilType){
     }
 }
 
-void TraversabilityGenerator3d::addSoilNode(const Eigen::Vector3d &center, int soilType){
+double gaussian2D(double x, double y, 
+                  double meanX, double meanY, 
+                  double sigmaX, double sigmaY) {
+    double term1 = std::pow((x - meanX) / sigmaX, 2);
+    double term2 = std::pow((y - meanY) / sigmaY, 2);
+    return std::exp(-0.5 * (term1 + term2));
+}
 
-    SoilNode * node = generateStartSoilNode(center);
-    if(!node){
+bool TraversabilityGenerator3d::addSoilNode(const SoilSample& sample){
+
+    std::cout << "TraversabilityGenerator3d::addSoilNode" << std::endl;
+
+
+    SoilNode * sampleNode = generateStartSoilNode(sample.location);
+    if(!sampleNode){
         LOG_ERROR_S << "Failed to add soil patch to the soilMap";
-        return;
+        return false;
     }
 
-    setSoilType(node, soilType);
-}
+    std::deque<SoilNode *> candidates;
+    candidates.push_back(sampleNode);
 
-
-void TraversabilityGenerator3d::addSoilNode(const Eigen::Vector3d &center, 
-                                            const Eigen::Vector3d &min, 
-                                            const Eigen::Vector3d &max, 
-                                            int soilType){
-
-    const Vector2d res = soilMap.getResolution();
-
-    double sizeX = max.x() - min.x();
-    double sizeY = max.y() - min.y();
-
-    //we oversample by factor 2 to account for aliasing
-    for(double x = -sizeX/2; x <= sizeX/2; x += res.x() / 2.0)
+    Eigen::Vector3d samplePos;
+    if(!soilMap.fromGrid(sampleNode->getIndex(), samplePos, sampleNode->getHeight()))
     {
-        for(double y = -sizeY/2; y <= sizeY/2; y += res.y() / 2.0)
-        {
-            Vector3d pos(x, y, 0);
-            Vector3d posMLS = center + pos;
+        LOG_ERROR_S << "TraversabilityGenerator3d: Internal error node out of grid";
+        return false;
+    }
 
-            SoilNode * node = generateStartSoilNode(posMLS);
+    double likelihoodSand = 1;
+    double likelihoodConcrete = 1;
+    double likelihoodGravel = 1;
+    double likelihoodRocks = 1;
 
-            if(!node){
-                LOG_ERROR_S << "Failed to add soil patch to the soilMap";
+    // Adjust likelihoods based on the terrain type
+    switch (sample.type) {
+        case SAND:
+            likelihoodConcrete *= 0.1;
+            likelihoodGravel *= 0.1;
+            likelihoodRocks *= 0.1;
+            break;
+        case CONCRETE:
+            likelihoodSand *= 0.1;
+            likelihoodGravel *= 0.1;
+            likelihoodRocks *= 0.1;
+            break;
+        case GRAVEL:
+            likelihoodSand *= 0.1;
+            likelihoodConcrete *= 0.1;
+            likelihoodRocks *= 0.1;
+            break;
+        case ROCKS:
+            likelihoodSand *= 0.1;
+            likelihoodConcrete *= 0.1;
+            likelihoodGravel *= 0.1;
+            break;
+        default:
+            break;
+    }      
+
+    SoilNode * soilNode = static_cast<SoilNode *>(sampleNode);
+
+    soilNode->getUserData().updateProbabilities(likelihoodSand, 
+                                                likelihoodConcrete,
+                                                likelihoodGravel,
+                                                likelihoodRocks);
+
+#ifdef ENABLE_DEBUG_DRAWINGS
+    V3DD::COMPLEX_DRAWING([&]()
+    {
+        V3DD::DRAW_TEXT("traversability_generator3d_probability_sand", samplePos, std::to_string(soilNode->getUserData().probSand), 0.05, V3DD::Color::magenta);
+    });
+
+    Eigen::Vector3d normal = Eigen::Vector3d::UnitZ();
+    Eigen::Vector3d patchSize{0.1, 0.1, 0.05};
+    drawWireFrameBox(normal,samplePos,patchSize,V3DD::Color::blue);
+#endif
+
+    std::unordered_set<SoilNode*> expandedNodes;
+    while(!candidates.empty())
+    {
+        std::cout << "Expanded neighbor" << std::endl;
+        SoilNode *currentNode = candidates.front();
+        candidates.pop_front();   
+        if (expandedNodes.find(currentNode) != expandedNodes.end()) {
+            continue;
+        }
+        expandedNodes.insert(currentNode);
+        for (auto *neighbor : currentNode->getConnections()) {
+
+            Eigen::Vector3d neighborPos;
+            if(!soilMap.fromGrid(neighbor->getIndex(), neighborPos, neighbor->getHeight()))
+            {
+                LOG_ERROR_S << "TraversabilityGenerator3d: Internal error node out of grid";
+                return false;
+            }
+
+            double likelihood = gaussian2D(neighborPos.x(), neighborPos.y(), 
+                                    samplePos.x(), samplePos.y(), 
+                                    sample.sigmaX, sample.sigmaY);
+
+            if (likelihood < 0.05){
                 continue;
             }
 
-            setSoilType(node, soilType);
+            likelihoodSand = likelihood;
+            likelihoodConcrete = likelihood;
+            likelihoodGravel = likelihood;
+            likelihoodRocks = likelihood;
+
+            // Adjust likelihoods based on the terrain type
+            switch (sample.type) {
+                case SAND:
+                    likelihoodConcrete *= 0.1;
+                    likelihoodGravel *= 0.1;
+                    likelihoodRocks *= 0.1;
+                    break;
+                case CONCRETE:
+                    likelihoodSand *= 0.1;
+                    likelihoodGravel *= 0.1;
+                    likelihoodRocks *= 0.1;
+                    break;
+                case GRAVEL:
+                    likelihoodSand *= 0.1;
+                    likelihoodConcrete *= 0.1;
+                    likelihoodRocks *= 0.1;
+                    break;
+                case ROCKS:
+                    likelihoodSand *= 0.1;
+                    likelihoodConcrete *= 0.1;
+                    likelihoodGravel *= 0.1;
+                    break;
+                default:
+                    break;
+            }        
+
+            SoilNode * n = static_cast<SoilNode *>(neighbor);
+            n->getUserData().updateProbabilities(likelihoodSand, 
+                                                        likelihoodConcrete,
+                                                        likelihoodGravel,
+                                                        likelihoodRocks);
+
+#ifdef ENABLE_DEBUG_DRAWINGS
+            V3DD::COMPLEX_DRAWING([&]()
+            {
+                V3DD::DRAW_TEXT("traversability_generator3d_probability_sand", neighborPos, std::to_string(n->getUserData().probSand), 0.05, V3DD::Color::magenta);
+            });
+
+            drawWireFrameBox(normal,neighborPos,patchSize,V3DD::Color::blue);
+#endif
+            candidates.push_back(static_cast<SoilNode *>(n));
         }
     }
+
+    setSoilType(sampleNode, sample.type);
+    return true;
 }
-
-void TraversabilityGenerator3d::addSoilNode(const Eigen::Vector3d &center, 
-                                            double radius, 
-                                            int soilType){
-
-    const Vector2d res = mlsGrid->getResolution();
-
-    const double sizeHalfX = radius;
-    const double sizeHalfY = radius;
-
-    //we oversample by factor 2 to account for aliasing
-    for(double x = -sizeHalfX; x <= sizeHalfX; x += res.x() / 2.0)
-    {
-        for(double y = -sizeHalfY; y <= sizeHalfY; y += res.y() / 2.0)
-        {
-            if(Vector2d(x,y).norm() > radius)
-                continue;
-
-            Vector3d pos(x, y, 0);
-            Vector3d posMLS = center + pos;
-
-            SoilNode * node = generateStartSoilNode(posMLS);
-
-            if(!node){
-                LOG_ERROR_S << "Failed to add soil patch to the soilMap";
-                continue;
-            }
-
-            setSoilType(node, soilType);
-        }
-    }
-
-    //expand the soil nodes
-    //addSoilPatches(node);
-    return;
-}
-
 }

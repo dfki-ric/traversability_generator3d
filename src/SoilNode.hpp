@@ -3,75 +3,47 @@
 #include <maps/grid/TraversabilityMap3d.hpp>
 #include <boost/serialization/serialization.hpp>
 
+#include "SoilSample.hpp"
+
 namespace traversability_generator3d
 {
+const float PRIOR_PROB = 0.25;
 
 /**Node struct for TraversabilityMap3d */
 struct SoilData
 {
+    double probSand = PRIOR_PROB;
+    double probConcrete = PRIOR_PROB;
+    double probGravel = PRIOR_PROB;
+    double probRocks = PRIOR_PROB;
 
-    /** The plane that has been fitted to the mls at the location of this node */
-    Eigen::Hyperplane<double, 3> plane;
-
-    /** continuous unique id  that can be used as index for additional metadata */
-    size_t id; 
-
-    Eigen::Vector3d location;
-    int soil_type;
-
-    /** Serializes the members of this class*/
-    template<class Archive>
-    void serialize(Archive & ar, const unsigned int version)
+    // Update probabilities for each terrain type
+    void updateProbabilities(double likelihoodSand, 
+                             double likelihoodConcrete, 
+                             double likelihoodGravel, 
+                             double likelihoodRocks)
     {
-        ar & plane.offset();
-        ar & plane.normal().x();
-        ar & plane.normal().y();
-        ar & plane.normal().z();
-        ar & id;
-        ar & location.x();
-        ar & location.y();
-        ar & location.z();
-        ar & soil_type;
+
+        double evidence = likelihoodSand * probSand + 
+                          likelihoodConcrete * probConcrete + 
+                          likelihoodGravel * probGravel + 
+                          likelihoodRocks * probRocks;
+        
+        if (evidence == 0){
+            return;
+        }
+        
+        probSand = (likelihoodSand * probSand) / evidence;
+        probConcrete = (likelihoodConcrete * probConcrete) / evidence;
+        probGravel = (likelihoodGravel * probGravel) / evidence;
+        probRocks = (likelihoodRocks * probRocks) / evidence;
     }
 
-};
-/*
-template <class T>
-class GroundNode : public maps::grid::TraversabilityNode<T>
-{
-public:
-
-    enum GROUNDTYPE
-    {
-        CONCRETE,
-        ROCK,
-        SAND,
-        GRAVEL
-    };
-
-    GroundNode(float height, const maps::grid::Index& idx) : 
-        maps::grid::TraversabilityNode<T>(height, idx)
-    {
-    };
-
-    void setGroundType(GROUNDTYPE t) ;
-    GROUNDTYPE getGroundType() const ;
-
-    enum GROUNDTYPE ground_type;
+    //TODO:
+    //Based on the probabilities decide on a single soil type which will be used 
+    //in the planning phase
+    SoilType type;
 };
 
-template<class T>
-void GroundNode<T>::setGroundType(GroundNode<T>::GROUNDTYPE t)
-{
-    ground_type = t;
-}
-
-template<class T>
-typename GroundNode<T>::GROUNDTYPE GroundNode<T>::getGroundType() const
-{
-    return ground_type;
-}
-*/
 typedef maps::grid::TraversabilityNode<SoilData> SoilNode;
-//typedef GroundNode<SoilData> SoilNode;
 }

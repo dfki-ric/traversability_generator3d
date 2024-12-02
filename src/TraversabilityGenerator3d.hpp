@@ -121,10 +121,8 @@ public:
     
     void setInitialPatch(const Eigen::Affine3d &ground2Mls, double patchRadius);
 
-    void setSoilType(SoilNode * node, int soilType);
-    void addSoilNode(const Eigen::Vector3d &center, int soilType);
-    void addSoilNode(const Eigen::Vector3d &center, double radius, int soilType);
-    void addSoilNode(const Eigen::Vector3d &center, const Eigen::Vector3d &min, const Eigen::Vector3d &max, int soilType);
+    void setSoilType(SoilNode * node, SoilType soilType);
+    bool addSoilNode(const SoilSample& sample);
 
     virtual TravGenNode *generateStartNode(const Eigen::Vector3d &startPos);
     TravGenNode *findMatchingTraversabilityPatchAt(maps::grid::Index idx, const double curHeight) const;
