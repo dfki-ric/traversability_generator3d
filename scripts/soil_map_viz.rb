@@ -80,25 +80,10 @@ planner_port_soil_sample_writer = planner_port_soil_sample.writer
 
 widget.btn_concrete.connect(SIGNAL('clicked()')) do
     sample = Types::Traversability_generator3d::SoilSample.new()
-
-    if (widget.listSampleTypes.currentItem.text == "POINT")
-        sample.sampleType = 0
-    end
-
-    if (widget.listSampleTypes.currentItem.text == "CIRCLE")
-        sample.sampleType = 1
-    end
-
-    if (widget.listSampleTypes.currentItem.text == "BOX")
-        sample.sampleType = 2
-    end
-
-    sample.min = Eigen::Vector3.new(widget.min_x.value, widget.min_y.value, 0)
-    sample.max = Eigen::Vector3.new(widget.max_x.value, widget.max_y.value, 0)
-
-    sample.radius = widget.sb_radius.value
-    sample.soilType = 0
-
+    sample.type = 0
+    sample.sigmaX = 0.5
+    sample.sigmaY = 0.5
+    sample.location = Eigen::Vector3.new(widget.center_x.value, widget.center_y.value, widget.center_z.value)
     samples = planner_port_soil_sample_writer.new_sample
     samples.push(sample)
     planner_port_soil_sample_writer.write(samples)    
@@ -107,26 +92,10 @@ end
 
 widget.btn_rocks.connect(SIGNAL('clicked()')) do
     sample = Types::Traversability_generator3d::SoilSample.new()
-
-    if (widget.listSampleTypes.currentItem.text == "POINT")
-        sample.sampleType = 0
-    end
-
-    if (widget.listSampleTypes.currentItem.text == "CIRCLE")
-        sample.sampleType = 1
-    end
-
-    if (widget.listSampleTypes.currentItem.text == "BOX")
-        sample.sampleType = 2
-    end
-
-    sample.min = Eigen::Vector3.new(widget.min_x.value, widget.min_y.value, 0)
-    sample.max = Eigen::Vector3.new(widget.max_x.value, widget.max_y.value, 0)
-
-
-    sample.radius = widget.sb_radius.value
-    sample.soilType = 1
-
+    sample.type = 1
+    sample.sigmaX = 0.5
+    sample.sigmaY = 0.5
+    sample.location = Eigen::Vector3.new(widget.center_x.value, widget.center_y.value, widget.center_z.value)
     samples = planner_port_soil_sample_writer.new_sample
     samples.push(sample)
     planner_port_soil_sample_writer.write(samples)    
@@ -135,25 +104,10 @@ end
 
 widget.btn_sand.connect(SIGNAL('clicked()')) do
     sample = Types::Traversability_generator3d::SoilSample.new()
-
-    if (widget.listSampleTypes.currentItem.text == "POINT")
-        sample.sampleType = 0
-    end
-
-    if (widget.listSampleTypes.currentItem.text == "CIRCLE")
-        sample.sampleType = 1
-    end
-
-    if (widget.listSampleTypes.currentItem.text == "BOX")
-        sample.sampleType = 2
-    end
-
-    sample.min = Eigen::Vector3.new(widget.min_x.value, widget.min_y.value, 0)
-    sample.max = Eigen::Vector3.new(widget.max_x.value, widget.max_y.value, 0)
-
-    sample.radius = widget.sb_radius.value
-    sample.soilType = 2
-
+    sample.type = 2
+    sample.sigmaX = 0.5
+    sample.sigmaY = 0.5
+    sample.location = Eigen::Vector3.new(widget.center_x.value, widget.center_y.value, widget.center_z.value)
     samples = planner_port_soil_sample_writer.new_sample
     samples.push(sample)
     planner_port_soil_sample_writer.write(samples)    
@@ -162,25 +116,10 @@ end
 
 widget.btn_gravel.connect(SIGNAL('clicked()')) do
     sample = Types::Traversability_generator3d::SoilSample.new()
-
-    if (widget.listSampleTypes.currentItem.text == "POINT")
-        sample.sampleType = 0
-    end
-
-    if (widget.listSampleTypes.currentItem.text == "CIRCLE")
-        sample.sampleType = 1
-    end
-
-    if (widget.listSampleTypes.currentItem.text == "BOX")
-        sample.sampleType = 2
-    end
-
-    sample.min = Eigen::Vector3.new(widget.min_x.value, widget.min_y.value, 0)
-    sample.max = Eigen::Vector3.new(widget.max_x.value, widget.max_y.value, 0)
-
-    sample.radius = widget.sb_radius.value
-    sample.soilType = 3
-
+    sample.type = 3
+    sample.sigmaX = 0.5
+    sample.sigmaY = 0.5
+    sample.location = Eigen::Vector3.new(widget.center_x.value, widget.center_y.value, widget.center_z.value)
     samples = planner_port_soil_sample_writer.new_sample
     samples.push(sample)
     planner_port_soil_sample_writer.write(samples)    

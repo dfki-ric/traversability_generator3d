@@ -1489,7 +1489,19 @@ bool TraversabilityGenerator3d::addSoilNode(const SoilSample& sample){
 
 #endif
 
-        //TODO: Set the type of Node based on the probability values.
+        double probSand = currentNode->getUserData().probSand;
+        double probConcrete = currentNode->getUserData().probConcrete;
+        double probGravel = currentNode->getUserData().probGravel;
+        double probRocks = currentNode->getUserData().probRocks;
+
+        if (probSand > probConcrete && probSand > probGravel && probSand > probRocks)
+            setSoilType(currentNode, SoilType::SAND);
+        else if (probConcrete > probSand && probConcrete > probGravel && probConcrete > probRocks)
+            setSoilType(currentNode, SoilType::CONCRETE);
+        else if (probGravel > probSand && probGravel > probConcrete && probGravel > probRocks)
+            setSoilType(currentNode, SoilType::GRAVEL);
+        else
+            setSoilType(currentNode, SoilType::ROCKS);
 
         for (auto *neighbor : currentNode->getConnections()) {
 
@@ -1513,8 +1525,6 @@ bool TraversabilityGenerator3d::addSoilNode(const SoilSample& sample){
             candidates.push_back(n);
         }
     }
-
-    setSoilType(sampleNode, sample.type);
     return true;
 }
 }
