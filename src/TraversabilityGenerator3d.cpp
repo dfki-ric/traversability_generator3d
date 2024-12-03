@@ -1274,7 +1274,7 @@ SoilNode *TraversabilityGenerator3d::createSoilPatchAt(maps::grid::Index idx, co
 {
     SoilNode *ret = nullptr;
 
-    ret = new SoilNode(0.0, idx);
+    ret = new SoilNode(curHeight, idx);
     ret->setHeight(curHeight);
     ret->setNotExpanded();
     ret->setType(TraversabilityNodeBase::UNSET);
@@ -1291,7 +1291,17 @@ SoilNode* TraversabilityGenerator3d::findMatchingSoilPatchAt(Index idx, const do
     //check if we got an existing node
     for(SoilNode *snode : trList)
     {
-        return snode;
+        const double searchHeight = snode->getHeight();
+        if(std::abs(searchHeight-curHeight) <= config.maxStepHeight)
+        {
+            //found a connectable node
+            return snode;
+        }
+
+        if(searchHeight > curHeight)
+        {
+            return nullptr;
+        }    
     }
 
     return nullptr;
