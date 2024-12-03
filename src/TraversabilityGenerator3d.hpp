@@ -155,7 +155,7 @@ public:
     const maps::grid::TraversabilityMap3d<TravGenNode *> &getTraversabilityMap() const;
     const maps::grid::TraversabilityMap3d<SoilNode *> &getSoilMap() const;
 
-        
+        void addConnectedPatches(SoilNode *  node);
     void setConfig(const TraversabilityConfig &config);
 
 
