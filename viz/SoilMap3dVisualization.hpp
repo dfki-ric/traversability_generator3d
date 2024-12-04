@@ -43,7 +43,7 @@ namespace vizkit3d
 {
 
 class SoilMap3dVisualization
-    : public vizkit3d::MapVisualization<::maps::grid::TraversabilityMap3d<maps::grid::TraversabilityNodeBase *>>
+    : public vizkit3d::MapVisualization<::maps::grid::TraversabilityMap3d<traversability_generator3d::SoilNode *>>
 {
     Q_OBJECT
 
@@ -52,17 +52,17 @@ class SoilMap3dVisualization
     Q_PROPERTY(bool show_connections READ getShowConnections WRITE setShowConnections)
 
 protected:
-    virtual void updateDataIntern(const ::maps::grid::TraversabilityMap3d<maps::grid::TraversabilityNodeBase *>& data);
+    virtual void updateDataIntern(const ::maps::grid::TraversabilityMap3d<::traversability_generator3d::SoilNode *>& data);
     virtual void updateMainNode(osg::Node* node);
 
     virtual osg::ref_ptr< osg::Node > createMainNode();
 
-    ::maps::grid::TraversabilityMap3d<maps::grid::TraversabilityNodeBase *> map;
+    ::maps::grid::TraversabilityMap3d<traversability_generator3d::SoilNode *> map;
 
-    void addNodeList(const ::maps::grid::LevelList<::maps::grid::TraversabilityNodeBase *> &l, osg::Group* group);
+    void addNodeList(const ::maps::grid::LevelList<::traversability_generator3d::SoilNode *> &l, osg::Group* group);
 
-    void visualizeNode(const ::maps::grid::TraversabilityNodeBase *node);
-    void visualizeConnection(const ::maps::grid::TraversabilityNodeBase *from, const ::maps::grid::TraversabilityNodeBase *to);
+    void visualizeNode(const ::traversability_generator3d::SoilNode *node);
+    void visualizeConnection(const ::traversability_generator3d::SoilNode *from, const ::traversability_generator3d::SoilNode *to);
 
     osg::ref_ptr<osg::Geode> nodeGeode;
     osg::ref_ptr<osgviz::LinesNode> linesNode;
@@ -76,14 +76,14 @@ public:
     SoilMap3dVisualization();
     virtual ~SoilMap3dVisualization();
 
-    Q_INVOKABLE void updateData(::maps::grid::TraversabilityBaseMap3d const &sample)
+    Q_INVOKABLE void updateData(::traversability_generator3d::SoilMap3d const &sample)
     {
-        vizkit3d::Vizkit3DPlugin<::maps::grid::TraversabilityMap3d<maps::grid::TraversabilityNodeBase *>>::updateData(sample);
+        vizkit3d::Vizkit3DPlugin<::maps::grid::TraversabilityMap3d<::traversability_generator3d::SoilNode *>>::updateData(sample);
     }
 
-    Q_INVOKABLE void updateTrMap(::maps::grid::TraversabilityBaseMap3d const &sample)
+    Q_INVOKABLE void updateTrMap(::traversability_generator3d::SoilMap3d const &sample)
     {
-        vizkit3d::Vizkit3DPlugin<::maps::grid::TraversabilityMap3d<maps::grid::TraversabilityNodeBase *>>::updateData(sample);
+        vizkit3d::Vizkit3DPlugin<::maps::grid::TraversabilityMap3d<::traversability_generator3d::SoilNode *>>::updateData(sample);
     }
 
     double getIsolineInterval() const { return isoline_interval; }

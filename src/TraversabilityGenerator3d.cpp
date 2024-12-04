@@ -1278,11 +1278,10 @@ SoilNode *TraversabilityGenerator3d::createSoilPatchAt(maps::grid::Index idx, co
     ret->setHeight(curHeight);
     ret->setNotExpanded();
     ret->setType(TraversabilityNodeBase::UNSET);
-    ret->getUserData().type = SoilType::UNKNOWN;
+    ret->getUserData().soilType = SoilType::UNKNOWN;
     soilMap.at(idx).insert(ret);
     return ret;
 }
-
 
 SoilNode* TraversabilityGenerator3d::findMatchingSoilPatchAt(Index idx, const double curHeight) const
 {
@@ -1328,6 +1327,8 @@ void TraversabilityGenerator3d::setSoilType(SoilNode * node, SoilType type){
             node->setType(TraversabilityNodeBase::UNKNOWN);
             break;
     }
+
+    node->getUserData().soilType = type;
 }
 
 template <typename T>
@@ -1512,6 +1513,8 @@ bool TraversabilityGenerator3d::addSoilNode(const SoilSample& sample){
             setSoilType(currentNode, SoilType::GRAVEL);
         else
             setSoilType(currentNode, SoilType::ROCKS);
+
+        std::cout << "TravGen: " << probSand << std::endl;
 
         for (auto *neighbor : currentNode->getConnections()) {
 

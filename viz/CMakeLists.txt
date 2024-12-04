@@ -27,6 +27,6 @@ if (vizkit3d_FOUND AND OSGVIZ_PRIMITIVES_FOUND)
             PrimitivesFactory
     )
 else()
-    message(STATUS "osgviz not found ... NOT building the maps-viz plugins")
+    message(STATUS "osgviz not found ... NOT building the traversability_generator3d-viz plugins")
 endif()
 

@@ -14,6 +14,12 @@ enum SoilType
     GRAVEL
 };
 
+// Serialize the enum as an integer
+template<class Archive>
+void serialize(Archive & ar, SoilType & type, const unsigned int version) {
+    ar & reinterpret_cast<int&>(type);
+}
+
 class SoilSample
 {
 public:
@@ -26,5 +32,17 @@ public:
     base::Vector3d location;  
     SoilType type;
     double sigmaX,sigmaY;
+
+    bool isValid() const {
+        return sigmaX > 0 && sigmaY > 0;
+    }
+
+    bool operator==(const SoilSample& other) const {
+        return location.isApprox(other.location) &&
+            type == other.type &&
+            sigmaX == other.sigmaX &&
+            sigmaY == other.sigmaY;
+    }
+
 };
 }

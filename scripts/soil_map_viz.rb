@@ -19,7 +19,7 @@ urf_model_file                                      = "#{ENV['AUTOPROJ_CURRENT_R
 # Plugins
 robot_visualization_current_state_plugin            = Vizkit.default_loader.RobotVisualization
 robot_visualization_current_state_plugin.modelFile  = urf_model_file.dup
-soil_map_plugin				                        = Vizkit.default_loader.TraversabilityMap3dVisualization
+soil_map_plugin				                        = Vizkit.default_loader.SoilMap3dVisualization
 planned_trajectory_plugin                           = Vizkit.default_loader.TrajectoryVisualization
 
 # load GUI created with the Qt Designer
