@@ -1375,9 +1375,6 @@ double gaussian2D(double x, double y,
 
 
 bool TraversabilityGenerator3d::addSoilNode(const SoilSample& sample){
-#ifdef ENABLE_DEBUG_DRAWINGS
-    V3DD::CLEAR_DRAWING("traversability_generator3d_probability_sand");
-#endif
     SoilNode * sampleNode = generateStartSoilNode(sample.location);
     if(!sampleNode){
         LOG_ERROR_S << "Failed to add soil patch to the soilMap";
@@ -1451,70 +1448,6 @@ bool TraversabilityGenerator3d::addSoilNode(const SoilSample& sample){
                                                        likelihoodConcrete,
                                                        likelihoodGravel,
                                                        likelihoodRocks);
-#ifdef ENABLE_DEBUG_DRAWINGS
-        V3DD::COMPLEX_DRAWING([&]()
-        {
-            //double probSand = currentNode->getUserData().probSand;
-            //std::ostringstream oss;
-            //oss << std::fixed << std::setprecision(2) << probSand;
-            //std::string resultSand = oss.str();
-
-            //double probConcrete = currentNode->getUserData().probConcrete;
-            //oss << std::fixed << std::setprecision(2) << probConcrete;
-            //std::string resultConcrete = oss.str();
-
-            //V3DD::DRAW_TEXT("traversability_generator3d_probability_sand", nodePos, resultSand, 0.05, V3DD::Color::magenta);
-            //nodePos.y()+=0.06;
-            //V3DD::DRAW_TEXT("traversability_generator3d_probability_concrete", nodePos, resultConcrete, 0.05, V3DD::Color::dark_blue);
-        });
-
-        /*
-        double probSand = currentNode->getUserData().probSand;
-        double probConcrete = currentNode->getUserData().probConcrete;
-        double probGravel = currentNode->getUserData().probGravel;
-        double probRocks = currentNode->getUserData().probRocks;
-
-        Eigen::Vector3d normal = Eigen::Vector3d::UnitZ();
-        Eigen::Vector3d patchSize{config.gridResolution, config.gridResolution, 0.05};
-
-        if (probSand > 0.3) {
-            Eigen::Vector4d sandColor = getShadeOfYellow(probSand);
-            V3DD::DRAW_CYLINDER("traversability_generator3d_mls_patch_box", nodePos, rotation, patchSize, sandColor);
-        }
-
-        if (probConcrete > 0.3) { // Adjust the threshold as needed
-            Eigen::Vector4d concreteColor = getShadeOfGray(probConcrete);
-            V3DD::DRAW_CYLINDER("traversability_generator3d_mls_patch_box", nodePos, rotation, patchSize, concreteColor);
-        }
-
-        if (probGravel > 0.3) { // Adjust the threshold as needed
-            Eigen::Vector4d gravelColor = getShadeOfBrown(probGravel);
-            V3DD::DRAW_CYLINDER("traversability_generator3d_mls_patch_box", nodePos, rotation, patchSize, gravelColor);
-        }
-
-        if (probRocks > 0.3) { // Adjust the threshold as needed
-            Eigen::Vector4d rocksColor = getShadeOfGreen(probRocks);
-            V3DD::DRAW_CYLINDER("traversability_generator3d_mls_patch_box", nodePos, rotation, patchSize, rocksColor);
-        }
-        */
-
-#endif
-
-        double probSand = currentNode->getUserData().probSand;
-        double probConcrete = currentNode->getUserData().probConcrete;
-        double probGravel = currentNode->getUserData().probGravel;
-        double probRocks = currentNode->getUserData().probRocks;
-
-        if (probSand > probConcrete && probSand > probGravel && probSand > probRocks)
-            setSoilType(currentNode, SoilType::SAND);
-        else if (probConcrete > probSand && probConcrete > probGravel && probConcrete > probRocks)
-            setSoilType(currentNode, SoilType::CONCRETE);
-        else if (probGravel > probSand && probGravel > probConcrete && probGravel > probRocks)
-            setSoilType(currentNode, SoilType::GRAVEL);
-        else
-            setSoilType(currentNode, SoilType::ROCKS);
-
-        std::cout << "TravGen: " << probSand << std::endl;
 
         for (auto *neighbor : currentNode->getConnections()) {
 

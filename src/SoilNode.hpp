@@ -16,8 +16,10 @@ struct SoilData
     SoilType soilType;
 
     SoilData()
-        : probSand(0.25), probConcrete(0.25),
-          probGravel(0.25), probRocks(0.25),
+        : probSand(PRIOR_PROB), 
+          probConcrete(PRIOR_PROB),
+          probGravel(PRIOR_PROB), 
+          probRocks(PRIOR_PROB),
           soilType(UNKNOWN) {}
 
     // Update probabilities for each terrain type
@@ -48,6 +50,16 @@ struct SoilData
         probConcrete = (likelihoodConcrete * probConcrete) / evidence;
         probGravel = (likelihoodGravel * probGravel) / evidence;
         probRocks = (likelihoodRocks * probRocks) / evidence;
+
+        if (probSand > probConcrete && probSand > probGravel && probSand > probRocks)
+            soilType = SoilType::SAND;
+        else if (probConcrete > probSand && probConcrete > probGravel && probConcrete > probRocks)
+            soilType = SoilType::CONCRETE;
+        else if (probGravel > probSand && probGravel > probConcrete && probGravel > probRocks)
+            soilType = SoilType::GRAVEL;
+        else
+            soilType = SoilType::ROCKS;
+
         return true;
     }
 
