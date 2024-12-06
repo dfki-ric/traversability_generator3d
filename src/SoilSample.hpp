@@ -43,7 +43,8 @@ public:
         return location.isApprox(other.location) &&
             type == other.type &&
             sigmaX == other.sigmaX &&
-            sigmaY == other.sigmaY;
+            sigmaY == other.sigmaY &&
+            uncertainty == other.uncertainty;
     }
 
 };
