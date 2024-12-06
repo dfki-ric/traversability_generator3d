@@ -9,6 +9,44 @@ Orocos.load_typekit "base"
 Orocos.load_typekit "ugv_nav4d"
 #Orocos.load_typekit "traversability_generator3d"
 
+# Define a class to represent a 3D Circle
+class Circle3D
+    attr_accessor :center, :radius, :points
+  
+    def initialize(center, radius, num_points)
+      @center = center    # [x_center, y_center, z_center]
+      @radius = radius    # radius of the circle
+      @num_points = num_points # Number of points to generate on the circle
+      @points = []        # Array to hold the points on the circle
+      generate_points     # Generate the points
+    end
+  
+    # Generate the points on the circle
+    def generate_points
+      # The circle lies in the XY plane (fixed z-coordinate)
+      (0...@num_points).each do |i|
+        # Parameterize the circle using an angle θ
+        theta = 2 * Math::PI * i / @num_points
+        x = @center[0] + @radius * Math.cos(theta)
+        y = @center[1] + @radius * Math.sin(theta)
+        z = @center[2]  # Assuming the circle lies in a plane parallel to the XY plane
+        @points << {x: x, y: y, z: z}
+      end
+    end
+  
+    # Function to get the points of the circle
+    def get_points
+      @points
+    end
+  
+    # Print the points on the circle
+    def print_points
+      @points.each_with_index do |point, index|
+        puts "Point #{index + 1}: (#{point[:x]}, #{point[:y]}, #{point[:z]})"
+      end
+    end
+end
+  
 if(ARGV.size > 0)
     sim = ARGV[0]
 end
@@ -76,13 +114,15 @@ planner_port_soil_sample        = planner_task.port "soil_sample"
 planner_port_soil_sample_writer = planner_port_soil_sample.writer
 
 ############################################################################################
-#Visualization 
+#Visualization   
 
+circle = Circle3D.new([0, 0, 0], 1, 10)
 widget.btn_concrete.connect(SIGNAL('clicked()')) do
     sample = Types::Traversability_generator3d::SoilSample.new()
     sample.type = 0
-    sample.sigmaX = 0.5
-    sample.sigmaY = 0.5
+    sample.sigmaX = widget.sigma_x.value
+    sample.sigmaY = widget.sigma_y.value
+    sample.uncertainty = widget.uncertainty.value
     sample.location = Eigen::Vector3.new(widget.center_x.value, widget.center_y.value, widget.center_z.value)
     samples = planner_port_soil_sample_writer.new_sample
     samples.push(sample)
@@ -93,8 +133,9 @@ end
 widget.btn_rocks.connect(SIGNAL('clicked()')) do
     sample = Types::Traversability_generator3d::SoilSample.new()
     sample.type = 1
-    sample.sigmaX = 0.5
-    sample.sigmaY = 0.5
+    sample.sigmaX = widget.sigma_x.value
+    sample.sigmaY = widget.sigma_y.value
+    sample.uncertainty = widget.uncertainty.value
     sample.location = Eigen::Vector3.new(widget.center_x.value, widget.center_y.value, widget.center_z.value)
     samples = planner_port_soil_sample_writer.new_sample
     samples.push(sample)
@@ -105,8 +146,9 @@ end
 widget.btn_sand.connect(SIGNAL('clicked()')) do
     sample = Types::Traversability_generator3d::SoilSample.new()
     sample.type = 2
-    sample.sigmaX = 0.5
-    sample.sigmaY = 0.5
+    sample.sigmaX = widget.sigma_x.value
+    sample.sigmaY = widget.sigma_y.value
+    sample.uncertainty = widget.uncertainty.value
     sample.location = Eigen::Vector3.new(widget.center_x.value, widget.center_y.value, widget.center_z.value)
     samples = planner_port_soil_sample_writer.new_sample
     samples.push(sample)
@@ -117,8 +159,9 @@ end
 widget.btn_gravel.connect(SIGNAL('clicked()')) do
     sample = Types::Traversability_generator3d::SoilSample.new()
     sample.type = 3
-    sample.sigmaX = 0.5
-    sample.sigmaY = 0.5
+    sample.sigmaX = widget.sigma_x.value
+    sample.sigmaY = widget.sigma_y.value
+    sample.uncertainty = widget.uncertainty.value
     sample.location = Eigen::Vector3.new(widget.center_x.value, widget.center_y.value, widget.center_z.value)
     samples = planner_port_soil_sample_writer.new_sample
     samples.push(sample)

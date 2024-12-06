@@ -1872,6 +1872,9 @@
      <height>24</height>
     </rect>
    </property>
+   <property name="minimum">
+    <double>-99.000000000000000</double>
+   </property>
   </widget>
   <widget class="QDoubleSpinBox" name="center_y">
    <property name="enabled">
@@ -1885,6 +1888,9 @@
      <height>24</height>
     </rect>
    </property>
+   <property name="minimum">
+    <double>-99.000000000000000</double>
+   </property>
   </widget>
   <widget class="QDoubleSpinBox" name="center_z">
    <property name="enabled">
@@ -1897,6 +1903,9 @@
      <width>66</width>
      <height>24</height>
     </rect>
+   </property>
+   <property name="minimum">
+    <double>-99.000000000000000</double>
    </property>
   </widget>
   <widget class="QLabel" name="label_2">
@@ -1945,6 +1954,93 @@
    </property>
    <property name="text">
     <string>Detection</string>
+   </property>
+  </widget>
+  <widget class="QDoubleSpinBox" name="sigma_x">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>330</x>
+     <y>30</y>
+     <width>66</width>
+     <height>24</height>
+    </rect>
+   </property>
+   <property name="value">
+    <double>0.500000000000000</double>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_4">
+   <property name="geometry">
+    <rect>
+     <x>220</x>
+     <y>30</y>
+     <width>111</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>SigmaX</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_5">
+   <property name="geometry">
+    <rect>
+     <x>220</x>
+     <y>60</y>
+     <width>111</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>SigmaY</string>
+   </property>
+  </widget>
+  <widget class="QDoubleSpinBox" name="sigma_y">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>330</x>
+     <y>60</y>
+     <width>66</width>
+     <height>24</height>
+    </rect>
+   </property>
+   <property name="value">
+    <double>0.500000000000000</double>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_6">
+   <property name="geometry">
+    <rect>
+     <x>220</x>
+     <y>90</y>
+     <width>111</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Uncertainty</string>
+   </property>
+  </widget>
+  <widget class="QDoubleSpinBox" name="uncertainty">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>330</x>
+     <y>90</y>
+     <width>66</width>
+     <height>24</height>
+    </rect>
+   </property>
+   <property name="maximum">
+    <double>1.000000000000000</double>
    </property>
   </widget>
  </widget>

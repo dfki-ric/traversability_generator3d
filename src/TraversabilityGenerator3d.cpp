@@ -890,9 +890,7 @@ void TraversabilityGenerator3d::setMLSGrid(std::shared_ptr< traversability_gener
     trMap.getLocalFrame() = mlsGrid->getLocalFrame();
 
     Vector2d newSizeSoilMap = grid->getSize().array() / soilMap.getResolution().array();
-
-    std::cout << "Size of soilmap " << newSizeSoilMap.transpose() << std::endl;
-    std::cout << "Initialized soil grid" << std::endl;
+    
     if (!soilGridInitialized){
         soilMap.extend(Vector2ui(newSizeSoilMap.x(), newSizeSoilMap.y()));
         soilMap.getLocalFrame() = mlsGrid->getLocalFrame();   
@@ -1368,11 +1366,13 @@ Eigen::Vector4d getShadeOfGreen(double prob) {
 double gaussian2D(double x, double y, 
                   double meanX, double meanY, 
                   double sigmaX, double sigmaY) {
+
+    // Exponent part of the Gaussian
     double term1 = std::pow((x - meanX) / sigmaX, 2);
     double term2 = std::pow((y - meanY) / sigmaY, 2);
+    
     return std::exp(-0.5 * (term1 + term2));
 }
-
 
 bool TraversabilityGenerator3d::addSoilNode(const SoilSample& sample){
     SoilNode * sampleNode = generateStartSoilNode(sample.location);
@@ -1419,27 +1419,29 @@ bool TraversabilityGenerator3d::addSoilNode(const SoilSample& sample){
         double likelihoodGravel = likelihood;
         double likelihoodRocks = likelihood;
 
-        // Adjust likelihoods based on the terrain type
+        // Lower uncertainty means stronger adjustment
+        double reductionFactor = 0.1 + (0.8 * sample.uncertainty);
+        
         switch (sample.type) {
             case SAND:
-                likelihoodConcrete *= 0.1;
-                likelihoodGravel *= 0.1;
-                likelihoodRocks *= 0.1;
+                likelihoodConcrete *= reductionFactor;
+                likelihoodGravel *= reductionFactor;
+                likelihoodRocks *= reductionFactor;
                 break;
             case CONCRETE:
-                likelihoodSand *= 0.1;
-                likelihoodGravel *= 0.1;
-                likelihoodRocks *= 0.1;
+                likelihoodSand *= reductionFactor;
+                likelihoodGravel *= reductionFactor;
+                likelihoodRocks *= reductionFactor;
                 break;
             case GRAVEL:
-                likelihoodSand *= 0.1;
-                likelihoodConcrete *= 0.1;
-                likelihoodRocks *= 0.1;
+                likelihoodSand *= reductionFactor;
+                likelihoodConcrete *= reductionFactor;
+                likelihoodRocks *= reductionFactor;
                 break;
             case ROCKS:
-                likelihoodSand *= 0.1;
-                likelihoodConcrete *= 0.1;
-                likelihoodGravel *= 0.1;
+                likelihoodSand *= reductionFactor;
+                likelihoodConcrete *= reductionFactor;
+                likelihoodGravel *= reductionFactor;
                 break;
             default:
                 break;

@@ -27,14 +27,16 @@ public:
     SoilSample(): type(UNKNOWN), 
                   sigmaX(1), 
                   sigmaY(1), 
+                  uncertainty(0),
                   location(0,0,0){};
 
     base::Vector3d location;  
     SoilType type;
     double sigmaX,sigmaY;
+    double uncertainty;
 
     bool isValid() const {
-        return sigmaX > 0 && sigmaY > 0;
+        return (sigmaX > 0 && sigmaY > 0) && (uncertainty >= 0 && uncertainty <= 1);
     }
 
     bool operator==(const SoilSample& other) const {

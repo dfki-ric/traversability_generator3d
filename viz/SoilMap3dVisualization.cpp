@@ -85,28 +85,26 @@ T clampE(T value, T min, T max) {
 
 Eigen::Vector4d getSandColor(double prob) {
     prob = clampE(prob, 0.0, 1.0);
-    double intensity = prob * 0.6 + 0.3;
+    double intensity = pow(prob, 2) * 0.6 + 0.3;  // Exponential growth
     return Eigen::Vector4d(intensity, intensity * 0.85, intensity * 0.5, 1.0);
 }
 
 Eigen::Vector4d getConcreteColor(double prob) {
     prob = clampE(prob, 0.0, 1.0);
-    double intensity = prob * 0.7 + 0.2;
+    double intensity = pow(prob, 1.5) * 0.7 + 0.2;  // Exponential growth f
     return Eigen::Vector4d(intensity * 0.9, intensity * 0.9, intensity, 1.0);
 }
 
-// Function to compute a green-shaded gravel color as an Eigen::Vector4d (RGBA)
 Eigen::Vector4d getGravelColor(double prob) {
-    prob = clampE(prob, 0.0, 1.0);                   // Clamp probability
-    double intensity = prob * 0.4 + 0.3;             // Scale intensity for green shade
-    return Eigen::Vector4d(intensity * 0.3, intensity * 0.7, intensity * 0.4, 1.0); // Cool green tones, Alpha = 1.0
+    prob = clampE(prob, 0.0, 1.0);  // Clamp probability
+    double intensity = pow(prob, 2.5) * 0.4 + 0.3;  // Exponential growth for stronger contrast
+    return Eigen::Vector4d(intensity * 0.3, intensity * 0.7, intensity * 0.4, 1.0);  // Green tones
 }
 
-// Function to compute a red-shaded rock color as an Eigen::Vector4d (RGBA)
 Eigen::Vector4d getRockColor(double prob) {
-    prob = clampE(prob, 0.0, 1.0);                   // Clamp probability
-    double intensity = prob * 0.5 + 0.3;             // Scale intensity for red shade
-    return Eigen::Vector4d(intensity * 0.8, intensity * 0.4, intensity * 0.3, 1.0); // Warm reddish tones, Alpha = 1.0
+    prob = clampE(prob, 0.0, 1.0);  // Clamp probability
+    double intensity = pow(prob, 1.8) * 0.5 + 0.3;  // Exponential increase for stronger change
+    return Eigen::Vector4d(intensity * 0.8, intensity * 0.4, intensity * 0.3, 1.0);  // Red tones
 }
 
 void SoilMap3dVisualization::visualizeNode(const SoilNode* node)
