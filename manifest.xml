@@ -11,6 +11,7 @@
   <depend package="slam/maps" />
   <depend package="slam/pcl" />
   <depend package="gui/vizkit3d_debug_drawings" />
+  <depend package="cgal"/>
   <keywords>
     <keyword>mapping</keyword>
     <keyword>navigation</keyword>
