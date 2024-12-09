@@ -4,8 +4,8 @@
   </description>
   <author>Arne Böckmann/arne.boeckmann@dfki.de</author>
   <maintainer>Muhammad Haider Khan Lodhi/haider_khan.lodhi@dfki.de</maintainer>
-  <license>not yet</license>
-  <url></url>
+  <license>BSD 3-Clause</license>
+  <url>https://github.com/dfki-ric/traversability_generator3d</url>
   <logo></logo>
   <depend package="base/cmake" />
   <depend package="slam/maps" />
@@ -18,7 +18,7 @@
     <keyword>planning</keyword>
   </keywords>
 
-  <stage>0</stage>
+  <stage>1</stage>
   <use>multi project</use>
   <activity>active</activity>
 
