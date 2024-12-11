@@ -662,10 +662,6 @@ void TraversabilityGenerator3d::growNodes()
                 default:
                     break;
             }
-
-            if(neighbor->getType() == TraversabilityNodeBase::TRAVERSABLE)
-            {
-            }
         });
     }
 
@@ -932,6 +928,8 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
     }
 
     if(node->getUserData().slope > config.maxSlope){
+        node->setType(TraversabilityNodeBase::OBSTACLE);
+        obstacleNodesGrowList.push_back(node);
         return false;
     }
 
@@ -996,7 +994,9 @@ TravGenNode *TraversabilityGenerator3d::createTraversabilityPatchAt(maps::grid::
             candidates.push_back(height);
         }
         if(height > (curHeight + config.maxStepHeight))
+        {
             break;
+        }
     }
 
     //Also add the interpolated height, to fill in small holes
@@ -1030,16 +1030,9 @@ TravGenNode *TraversabilityGenerator3d::createTraversabilityPatchAt(maps::grid::
         else
         {
             //rare border case, ransac correction moved patch out of reachable height
+            //the patch is set to OBSTACLE if the for loop finishes without finding
+            //a patch within the maxStepHeight margin of curHeight.
         }
-//#ifdef ENABLE_DEBUG_DRAWINGS
-//        V3DD::COMPLEX_DRAWING([&]()
-//        {
-//            maps::grid::Vector3d pos(globalPos);
-//            trMap.fromGrid(idx, globalPos);
-//            pos.z() = height;
-//            V3DD::DRAW_RING("neighbor patches", pos, mlsGrid->getResolution().x() / 2.0, 0.4, 0.01, V3DD::Color::blue);
-//        });
-//#endif
     }
 
     ret->setHeight(curHeight);
