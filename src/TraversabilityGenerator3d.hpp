@@ -90,6 +90,7 @@ protected:
     
     static double interpolate(double x, double x0, double y0, double x1, double y1);
     
+    bool obstacleCheck(const traversability_generator3d::TravGenNode* node) const;
     TravGenNode *createTraversabilityPatchAt(maps::grid::Index idx, const double curHeight);
 
     void growNodes();
