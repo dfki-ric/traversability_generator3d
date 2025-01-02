@@ -1,0 +1,2 @@
+Vizkit::UiLoader.register_3d_plugin('TravMap3dVisualization', "traversability_generator3d", 'TravMap3dVisualization' )
+Vizkit::UiLoader.register_3d_plugin_for('TravMap3dVisualization', "/traversability_generator3d/TravMap3d", :updateData )

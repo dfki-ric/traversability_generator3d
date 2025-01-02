@@ -7,6 +7,18 @@
 namespace traversability_generator3d
 {
 
+enum NodeType
+{
+    OBSTACLE = 0,
+    TRAVERSABLE,
+    FRONTIER,
+    INFLATED_OBSTACLE,
+    INFLATED_FRONTIER,
+    UNKNOWN,
+    HOLE,
+    UNSET
+};
+
 /**Node struct for TraversabilityMap3d */
 struct TravGenTrackingData
 {
@@ -25,7 +37,9 @@ struct TravGenTrackingData
     
     /** continuous unique id  that can be used as index for additional metadata */
     size_t id; 
-    
+
+    NodeType nodeType;
+
     /**Some orientations might be forbidden on this patch (e.g. due to slope). This vector
      * contains all orientations that are allowed */
     std::vector<base::AngleSegment> allowedOrientations;
@@ -45,9 +59,11 @@ struct TravGenTrackingData
         ar & slopeDirectionAtan2;
         ar & id;
         ar & allowedOrientations;
+        ar & nodeType;
     }
 };
 
 typedef maps::grid::TraversabilityNode<TravGenTrackingData> TravGenNode;
+typedef maps::grid::TraversabilityMap3d<TravGenNode *> TravMap3d;
 
 }

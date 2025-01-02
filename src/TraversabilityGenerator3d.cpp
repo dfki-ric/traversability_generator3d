@@ -642,6 +642,9 @@ void TraversabilityGenerator3d::growNodes()
 
         n->eachConnectedNode([&](maps::grid::TraversabilityNodeBase *neighbor, bool &expandNode, bool &stop)
         {
+
+            TravGenNode* node = static_cast<TravGenNode*>(neighbor);
+
             if((neighbor->getPosition(trMap) - nodePos).squaredNorm() > growRadiusSquared)
             {
                 //node out of radius, return
@@ -653,11 +656,14 @@ void TraversabilityGenerator3d::growNodes()
             switch(neighbor->getType())
             {
                 case TraversabilityNodeBase::FRONTIER:
-                    if(n->getType() == TraversabilityNodeBase::OBSTACLE)
+                    if(n->getType() == TraversabilityNodeBase::OBSTACLE){
                         neighbor->setType(n->getType());
+                        node->getUserData().nodeType = NodeType::INFLATED_OBSTACLE;
+                    }
                     break;
                 case TraversabilityNodeBase::TRAVERSABLE:
                     neighbor->setType(n->getType());
+                    node->getUserData().nodeType = NodeType::INFLATED_FRONTIER;
                     break;
                 default:
                     break;
@@ -768,11 +774,13 @@ void TraversabilityGenerator3d::inflateObstacles()
     {
         n->eachConnectedNode([&] (maps::grid::TraversabilityNodeBase *neighbor, bool &expandNode, bool &stop)
         {
+            TravGenNode* node = static_cast<TravGenNode*>(neighbor);
             if ((n->getPosition(trMap) - neighbor->getPosition(trMap)).norm() < inflRadius)
             {
                 if(neighbor->getType() == TraversabilityNodeBase::TRAVERSABLE)
                 {
                     neighbor->setType(TraversabilityNodeBase::OBSTACLE);
+                    node->getUserData().nodeType = NodeType::INFLATED_OBSTACLE;
                 }
                 expandNode = true;
             }
@@ -929,6 +937,7 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
 
     if(node->getUserData().slope > config.maxSlope){
         node->setType(TraversabilityNodeBase::OBSTACLE);
+        node->getUserData().nodeType = NodeType::OBSTACLE;
         obstacleNodesGrowList.push_back(node);
         return false;
     }
@@ -938,6 +947,7 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
         if(!checkStepHeightOBB(node))
         {
             node->setType(TraversabilityNodeBase::OBSTACLE);
+            node->getUserData().nodeType = NodeType::OBSTACLE;
             obstacleNodesGrowList.push_back(node);
             return false;
         }
@@ -946,6 +956,7 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
     if(!obstacleCheck(node))
     {
         node->setType(TraversabilityNodeBase::OBSTACLE);
+        node->getUserData().nodeType = NodeType::OBSTACLE;
         obstacleNodesGrowList.push_back(node);
         return false;
     }
@@ -955,6 +966,7 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
         if(!computeAllowedOrientations(node))
         {
             node->setType(TraversabilityNodeBase::OBSTACLE);
+            node->getUserData().nodeType = NodeType::OBSTACLE;
             obstacleNodesGrowList.push_back(node);
             return false;
         }
@@ -966,11 +978,13 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
     if(checkForFrontier(node))
     {
         node->setType(TraversabilityNodeBase::FRONTIER);
+        node->getUserData().nodeType = NodeType::FRONTIER;
         frontierNodesGrowList.push_back(node);
         return false;
     }
 
     node->setType(TraversabilityNodeBase::TRAVERSABLE);
+    node->getUserData().nodeType = NodeType::TRAVERSABLE;
 
     return true;
 }
@@ -1043,14 +1057,17 @@ TravGenNode *TraversabilityGenerator3d::createTraversabilityPatchAt(maps::grid::
         ret->setHeight(height);
         ret->setNotExpanded();
         ret->setType(TraversabilityNodeBase::UNSET);
+        ret->getUserData().nodeType = NodeType::UNSET;
 
         //there is a neighboring patch in the mls that has a reachable hight
         if(!computePlaneRansac(*ret))
         {
             if(mlsIdx.x() == 1 || mlsIdx.y() == 1) {
                 ret->setType(TraversabilityNodeBase::OBSTACLE);
+                ret->getUserData().nodeType = NodeType::OBSTACLE;
             } else {
                 ret->setType(TraversabilityNodeBase::UNKNOWN);
+                ret->getUserData().nodeType = NodeType::UNKNOWN;
             }
         }
 
@@ -1070,6 +1087,7 @@ TravGenNode *TraversabilityGenerator3d::createTraversabilityPatchAt(maps::grid::
     ret->setHeight(curHeight);
     ret->setNotExpanded();
     ret->setType(TraversabilityNodeBase::OBSTACLE);
+    ret->getUserData().nodeType = NodeType::OBSTACLE;
     trMap.at(idx).insert(ret);
     return ret;
 }
@@ -1093,7 +1111,6 @@ TravGenNode* TraversabilityGenerator3d::findMatchingTraversabilityPatchAt(Index 
             return nullptr;
         }
     }
-
     return nullptr;
 }
 
