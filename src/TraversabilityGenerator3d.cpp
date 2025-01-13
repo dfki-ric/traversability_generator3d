@@ -777,7 +777,9 @@ void TraversabilityGenerator3d::inflateObstacles()
             TravGenNode* node = static_cast<TravGenNode*>(neighbor);
             if ((n->getPosition(trMap) - neighbor->getPosition(trMap)).norm() < inflRadius)
             {
-                if(neighbor->getType() == TraversabilityNodeBase::TRAVERSABLE)
+                if(node->getUserData().nodeType == NodeType::TRAVERSABLE || 
+                   node->getUserData().nodeType == NodeType::INFLATED_FRONTIER || 
+                   node->getUserData().nodeType == NodeType::FRONTIER)
                 {
                     neighbor->setType(TraversabilityNodeBase::OBSTACLE);
                     node->getUserData().nodeType = NodeType::INFLATED_OBSTACLE;
