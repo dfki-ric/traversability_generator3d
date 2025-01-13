@@ -354,52 +354,15 @@ bool TraversabilityGenerator3d::checkForFrontier(const TravGenNode* node)
 {
     //check direct neighborhood for missing connected patches. If
     //patches are missing, this patch is unknown
-    using maps::grid::Index;
-    const Index& index = node->getIndex();
-    for(int x = -1; x <= 1; ++x)
+
+    for(maps::grid::TraversabilityNodeBase* n : node->getConnections())
     {
-        for(int y = -1; y <= 1; ++y)
+        if(n == nullptr || n->getType() == TraversabilityNodeBase::UNKNOWN)
         {
-            if(x==0 && y==0) continue;
-            const Index neighborIndex(index.x() + x, index.y() + y);
-            const TravGenNode* neighbor = node->getConnectedNode(neighborIndex);
-            if(neighbor == nullptr || neighbor->getType() == TraversabilityNodeBase::UNKNOWN)
-            {
-                return true;
-            }
-            else
-            {
-//#ifdef ENABLE_DEBUG_DRAWINGS
-                //Draw connection to found neighbor
-//                V3DD::COMPLEX_DRAWING([&]()
-//                {
-//                    Eigen::Vector3d neighborPos(neighbor->getIndex().x() * config.gridResolution, neighbor->getIndex().y() * config.gridResolution, neighbor->getHeight());
-//                    neighborPos.x() += config.gridResolution / 2.0;
-//                    neighborPos.y() += config.gridResolution / 2.0;
-//                    neighborPos = getTraversabilityMap().getLocalFrame().inverse(Eigen::Isometry) * neighborPos;
-//                    neighborPos.z() += 0.06;
-//                    Eigen::Vector3d pos(node->getIndex().x() * config.gridResolution, node->getIndex().y() * config.gridResolution, node->getHeight());
-//                    pos.x() += config.gridResolution / 2.0;
-//                    pos.y() += config.gridResolution / 2.0;
-//                    pos = getTraversabilityMap().getLocalFrame().inverse(Eigen::Isometry) * pos;
-//                    pos.z() += 0.06;
-//                    V3DD::DRAW_LINE("neighbor connections", pos, neighborPos, V3DD::Color::magenta);
-//                });
-//#endif
-            }
+            return true;
         }
     }
-//#ifdef ENABLE_DEBUG_DRAWINGS
-//    V3DD::COMPLEX_DRAWING([&]()
-//    {
-//        Eigen::Vector3d pos(node->getIndex().x() * config.gridResolution, node->getIndex().y() * config.gridResolution, node->getHeight());
-//        pos.x() += config.gridResolution / 2.0;
-//        pos.y() += config.gridResolution / 2.0;
-//        pos = getTraversabilityMap().getLocalFrame().inverse(Eigen::Isometry) * pos;
-//        pos.z() += 0.06;
-//        V3DD::DRAW_TEXT("missingNeighboursCount", pos, "Missing Neighbors", 0.02, V3DD::Color::magenta);
-//    });
-//#endif
+
     return false;
 }
 
