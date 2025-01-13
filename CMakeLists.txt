@@ -17,4 +17,5 @@ else()
 endif()
 
 rock_init()
+rock_feature(NOCURDIR)
 rock_standard_layout()
