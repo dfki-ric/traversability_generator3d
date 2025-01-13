@@ -9,6 +9,7 @@ if(${OSG_VERSION} VERSION_GREATER_EQUAL 3.6.4)
 endif()
 
 if (ROCK_QT_VERSION_4 AND vizkit3d_FOUND AND OSGVIZ_PRIMITIVES_FOUND)
+    add_definitions(-DTRAVGEN3D_PLUGIN_QT_4)
     rock_vizkit_plugin(traversability_generator3d-viz
             PluginLoader.cpp
             PatchesGeode.cpp
@@ -33,6 +34,7 @@ else()
 endif()
 
 if (ROCK_QT_VERSION_5 AND vizkit3d-qt5_FOUND AND OSGVIZ_PRIMITIVES_FOUND)
+    add_definitions(-DTRAVGEN3D_PLUGIN_QT_5)
     rock_vizkit_plugin(traversability_generator3d-viz-qt5
             PluginLoader.cpp
             PatchesGeode.cpp
