@@ -59,5 +59,9 @@ namespace vizkit3d {
             return NULL;
         };
     };
+#if ROCK_QT_VERSION_5
+    Q_PLUGIN_METADATA(IID "org.qt-project.Qt.QtPluginVizkitMaps")
+#elif ROCK_QT_VERSION_4
     Q_EXPORT_PLUGIN2(QtPluginVizkitMaps, QtPluginVizkitMaps)
+#endif
 }
