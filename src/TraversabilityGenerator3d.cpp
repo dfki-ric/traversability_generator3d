@@ -916,7 +916,7 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
         }
     } 
 
-    if(!obstacleCheck(node))
+    if(!isNodeFreeOfObstacles(node))
     {
         node->setType(TraversabilityNodeBase::OBSTACLE);
         node->getUserData().nodeType = NodeType::OBSTACLE;
@@ -952,7 +952,7 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
     return true;
 }
 
-bool TraversabilityGenerator3d::obstacleCheck(const traversability_generator3d::TravGenNode* node) const
+bool TraversabilityGenerator3d::isNodeFreeOfObstacles(const traversability_generator3d::TravGenNode* node) const
 {
     //check if there is an mls patch above the ground
     Eigen::Vector3d nodePos;
