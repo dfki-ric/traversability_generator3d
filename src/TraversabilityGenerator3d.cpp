@@ -595,7 +595,7 @@ Polyhedron_3 TraversabilityGenerator3d::createPolyhedronFromSurfacePatch(const S
     return patch;
 }
 
-void TraversabilityGenerator3d::growNodes()
+void TraversabilityGenerator3d::inflateFrontiers()
 {
     const double growRadiusSquared = std::pow(std::sqrt(config.robotSizeX * config.robotSizeX + config.robotSizeY * config.robotSizeY) / 2.0, 2);
 
@@ -719,9 +719,7 @@ void TraversabilityGenerator3d::expandAll(TravGenNode* startNode, const double e
         }
     }
 
-    //grow frontier nodes
-    growNodes();
-    //grow obstacle nodes
+    inflateFrontiers();
     inflateObstacles();
 
     LOG_DEBUG_S << "Expanded " << cnd << " nodes";

@@ -93,7 +93,7 @@ protected:
     bool obstacleCheck(const traversability_generator3d::TravGenNode* node) const;
     TravGenNode *createTraversabilityPatchAt(maps::grid::Index idx, const double curHeight);
 
-    void growNodes();
+    void inflateFrontiers();
 
     void inflateObstacles();
     
