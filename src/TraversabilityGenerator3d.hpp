@@ -4,6 +4,7 @@
 #include <memory>
 #include "TraversabilityConfig.hpp"
 #include "TravGenNode.hpp"
+#include "SoilNode.hpp"
 
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Polyhedron_3.h>
@@ -68,8 +69,11 @@ protected:
     std::vector<TravGenNode*> obstacleNodesGrowList;
     
     maps::grid::TraversabilityMap3d<TravGenNode*> trMap;
+    maps::grid::TraversabilityMap3d<SoilNode*> soilMap;
+
     int currentNodeId = 0; //used while expanding
-    
+    int currentSoilNodeId = 0; //used while expanding
+
     std::vector<TravGenNode *> frontierNodesGrowList;
     
     bool computePlaneRansac(TravGenNode &node);
@@ -92,6 +96,7 @@ protected:
     
     bool isNodeFreeOfObstacles(const traversability_generator3d::TravGenNode* node) const;
     TravGenNode *createTraversabilityPatchAt(maps::grid::Index idx, const double curHeight);
+    SoilNode *createSoilPatchAt(maps::grid::Index idx, const double curHeight);
 
     void inflateFrontiers();
 
@@ -102,19 +107,27 @@ protected:
     void addInitialPatchToMLS();
     
     int intersections();
-    
+
+    bool soilGridInitialized;
+
+    SoilNode* generateStartSoilNode(const Eigen::Vector3d& startPos);
+
 public:
     TraversabilityGenerator3d(const TraversabilityConfig &config);
 
     virtual ~TraversabilityGenerator3d();
 
     void clearTrMap();
-    
+    void clearSoilMap();
+
     void setInitialPatch(const Eigen::Affine3d &ground2Mls, double patchRadius);
-    
+
+    void setSoilType(SoilNode * node, SoilType soilType);
+    bool addSoilNode(const SoilSample& sample);
+
     virtual TravGenNode *generateStartNode(const Eigen::Vector3d &startPos);
     TravGenNode *findMatchingTraversabilityPatchAt(maps::grid::Index idx, const double curHeight) const;
-    
+    SoilNode* findMatchingSoilPatchAt(maps::grid::Index idx, const double curHeight) const;
     
     /**Expand the map starting from all given @p positions */
     void expandAll(const std::vector<Eigen::Vector3d>& positions);
@@ -140,7 +153,8 @@ public:
     int getNumNodes() const;
     
     const maps::grid::TraversabilityMap3d<TravGenNode *> &getTraversabilityMap() const;
-
+    const maps::grid::TraversabilityMap3d<SoilNode *> &getSoilMap() const;
+    void addConnectedPatches(SoilNode *  node);
         
     void setConfig(const TraversabilityConfig &config);
 

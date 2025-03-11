@@ -15,8 +15,10 @@ if (ROCK_QT_VERSION_4 AND vizkit3d_FOUND AND OSGVIZ_PRIMITIVES_FOUND)
             PatchesGeode.cpp
         MOC
             TravMap3dVisualization.cpp
+            SoilMap3dVisualization.cpp
         HEADERS
             TravMap3dVisualization.hpp
+            SoilMap3dVisualization.hpp
             PatchesGeode.hpp
         DEPS 
             traversability_generator3d
@@ -40,8 +42,10 @@ if (ROCK_QT_VERSION_5 AND vizkit3d-qt5_FOUND AND OSGVIZ_PRIMITIVES_FOUND)
             PatchesGeode.cpp
         MOC
             TravMap3dVisualization.cpp
+            SoilMap3dVisualization.cpp
         HEADERS
             TravMap3dVisualization.hpp
+            SoilMap3dVisualization.hpp
             PatchesGeode.hpp
         DEPS 
             traversability_generator3d

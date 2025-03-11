@@ -26,6 +26,7 @@
 //
 #include <vizkit3d/Vizkit3DPlugin.hpp>
 #include "TravMap3dVisualization.hpp"
+#include "SoilMap3dVisualization.hpp"
 
 namespace vizkit3d {
     class QtPluginVizkitMaps : public vizkit3d::VizkitPluginFactory
@@ -42,6 +43,7 @@ namespace vizkit3d {
         {
             QStringList *pluginNames = new QStringList();
             pluginNames->push_back("TravMap3dVisualization");
+            pluginNames->push_back("SoilMap3dVisualization");
             return pluginNames;
         }
 
@@ -51,6 +53,10 @@ namespace vizkit3d {
             if (pluginName == "TravMap3dVisualization")
             {
                 plugin = new TravMap3dVisualization();
+            }
+            if (pluginName == "SoilMap3dVisualization")
+            {
+                plugin = new SoilMap3dVisualization();
             }
             if (plugin)
             {

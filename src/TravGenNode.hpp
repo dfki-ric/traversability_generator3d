@@ -63,6 +63,36 @@ struct TravGenTrackingData
     }
 };
 
+// Inline operator<< to print NodeType as a string
+inline std::ostream& operator<<(std::ostream& os, NodeType type)
+{
+    switch (type)
+    {
+        case NodeType::OBSTACLE: os << "OBSTACLE"; break;
+        case NodeType::TRAVERSABLE: os << "TRAVERSABLE"; break;
+        case NodeType::FRONTIER: os << "FRONTIER"; break;
+        case NodeType::INFLATED_OBSTACLE: os << "INFLATED_OBSTACLE"; break;
+        case NodeType::INFLATED_FRONTIER: os << "INFLATED_FRONTIER"; break;
+        case NodeType::UNKNOWN: os << "UNKNOWN"; break;
+        case NodeType::HOLE: os << "HOLE"; break;
+        case NodeType::UNSET: os << "UNSET"; break;
+        default: os << "INVALID_NODE_TYPE"; break;
+    }
+    return os;
+}
+
+// Inline operator== for NodeType
+inline bool operator==(NodeType lhs, NodeType rhs)
+{
+    return static_cast<int>(lhs) == static_cast<int>(rhs);
+}
+
+// Inline operator== for NodeType
+inline bool operator==(NodeType lhs, int rhs)
+{
+    return (static_cast<int>(lhs) == rhs);
+}
+
 typedef maps::grid::TraversabilityNode<TravGenTrackingData> TravGenNode;
 typedef maps::grid::TraversabilityMap3d<TravGenNode *> TravMap3d;
 
