@@ -828,24 +828,13 @@ void TraversabilityGenerator3d::setMLSGrid(std::shared_ptr< traversability_gener
         addInitialPatch = false;
     }
 
-    LOG_DEBUG_S << "Grid has size " << grid->getSize().transpose() << " resolution " << grid->getResolution().transpose();
-    LOG_DEBUG_S << "Internal resolution is " << trMap.getResolution().transpose();
     Vector2d newSize = grid->getSize().array() / trMap.getResolution().array();
-    LOG_DEBUG_S << "MLS was set " << grid->getResolution().transpose() << " " << mlsGrid->getResolution().transpose();
-
-    LOG_DEBUG_S << "New Size is " << newSize.transpose();
-
     trMap.extend(Vector2ui(newSize.x(), newSize.y()));
-
     trMap.getLocalFrame() = mlsGrid->getLocalFrame();
-
-    Vector2d newSizeSoilMap = grid->getSize().array() / soilMap.getResolution().array();
     
-    if (!soilGridInitialized){
-        soilMap.extend(Vector2ui(newSizeSoilMap.x(), newSizeSoilMap.y()));
-        soilMap.getLocalFrame() = mlsGrid->getLocalFrame();   
-        soilGridInitialized = true;
-    }
+    soilMap.extend(Vector2ui(newSize.x(), newSize.y()));
+    soilMap.getLocalFrame() = mlsGrid->getLocalFrame();   
+    
     clearTrMap();
 }
 
@@ -873,7 +862,6 @@ void TraversabilityGenerator3d::clearSoilMap()
 
         l.clear();
     }
-    soilGridInitialized = false;
 }
 
 TravGenNode* TraversabilityGenerator3d::generateStartNode(const Eigen::Vector3d& startPos)
@@ -938,8 +926,10 @@ SoilNode* TraversabilityGenerator3d::generateStartSoilNode(const Eigen::Vector3d
 
 bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
 {
+    Eigen::Vector3d nodePos = node->getPosition(trMap);
+    SoilNode *soilNode = generateStartSoilNode(nodePos);
+    
     node->setExpanded();
-
     if(node->getType() == TraversabilityNodeBase::UNKNOWN)
     {
         return false;
@@ -997,6 +987,47 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
         node->getUserData().nodeType = NodeType::FRONTIER;
         frontierNodesGrowList.push_back(node);
         return false;
+    }
+
+    if (config.useSoilInformation){
+        switch(soilNode->getUserData().soilType){
+            case SoilType::SAND:
+                if (!config.traverseSand){
+                    node->setType(TraversabilityNodeBase::OBSTACLE);
+                    node->getUserData().nodeType = NodeType::OBSTACLE;
+                    obstacleNodesGrowList.push_back(node);
+                    return true;
+                }
+                break;
+            case SoilType::CONCRETE:
+            if (!config.traverseConcrete){
+                node->setType(TraversabilityNodeBase::OBSTACLE);
+                node->getUserData().nodeType = NodeType::OBSTACLE;
+                obstacleNodesGrowList.push_back(node);
+            }            
+                break;
+            case SoilType::GRAVEL:
+            if (!config.traverseGravel){
+                node->setType(TraversabilityNodeBase::OBSTACLE);
+                node->getUserData().nodeType = NodeType::OBSTACLE;
+                obstacleNodesGrowList.push_back(node);
+            }
+                break;
+            case SoilType::ROCKS:
+            if (!config.traverseRocks){
+                node->setType(TraversabilityNodeBase::OBSTACLE);
+                node->getUserData().nodeType = NodeType::OBSTACLE;
+                obstacleNodesGrowList.push_back(node);
+                return true;
+            }
+                break;
+            case SoilType::UNKNOWN_SOIL:
+
+                break;
+            default:
+                break;
+        } 
+        
     }
 
     node->setType(TraversabilityNodeBase::TRAVERSABLE);

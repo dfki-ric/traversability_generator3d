@@ -114,47 +114,31 @@ void SoilMap3dVisualization::visualizeNode(const SoilNode* node)
     PatchesGeode *geode = dynamic_cast<PatchesGeode *>(nodeGeode.get());
     geode->setPosition(curNodePos.x(), curNodePos.y());
 
-    LOG_INFO_S << "Node type: " << typeid(*node).name();
-
-
-    const SoilNode* soilNode = static_cast<const SoilNode*>(node);
-    if (!soilNode) {
-        LOG_ERROR_S << "Failed to cast node to SoilNode!";
-        return;
-    }
-
-    const SoilData& soilData = soilNode->getUserData();
-    std::cout << "probSand=" << soilData.probSand 
-            << ", probConcrete=" << soilData.probConcrete 
-            << ", probGravel=" << soilData.probGravel 
-            << ", probRocks=" << soilData.probRocks
-            << ", Type= " << soilNode->getUserData().soilType << "\n";
-
-    double probSand = soilNode->getUserData().probSand;
-    double probConcrete = soilNode->getUserData().probConcrete;
-    double probGravel = soilNode->getUserData().probGravel;
-    double probRocks = soilNode->getUserData().probRocks;
+    double probSand = node->getUserData().probSand;
+    double probConcrete = node->getUserData().probConcrete;
+    double probGravel = node->getUserData().probGravel;
+    double probRocks = node->getUserData().probRocks;
 
     osg::Vec4d color;
     Eigen::Vector4d eColor;
 
-    if (soilNode->getUserData().soilType == -1) {
+    if (node->getUserData().soilType == -1) {
         eColor = Eigen::Vector4d(0,1,1,1);
     }
 
-    if (soilNode->getUserData().soilType == 0) {
+    if (node->getUserData().soilType == 0) {
         eColor = getConcreteColor(probConcrete);
     }
 
-    if (soilNode->getUserData().soilType == 1) {
+    if (node->getUserData().soilType == 1) {
         eColor = getRockColor(probRocks);
     }
 
-    if (soilNode->getUserData().soilType == 2) {
+    if (node->getUserData().soilType == 2) {
         eColor = getSandColor(probSand);
     }
 
-    if (soilNode->getUserData().soilType == 3) {
+    if (node->getUserData().soilType == 3) {
         eColor = getGravelColor(probGravel);
     }
 
@@ -165,7 +149,7 @@ void SoilMap3dVisualization::visualizeNode(const SoilNode* node)
 
     geode->setColor(color);
     
-    if(fabs(soilNode->getHeight()) > 30000)
+    if(fabs(node->getHeight()) > 30000)
     {
         //FIXME if nodes are too far aways, the culling mechanism of osg breaks.
         // I.e. verticves disappear when zooming in on them.
@@ -173,11 +157,10 @@ void SoilMap3dVisualization::visualizeNode(const SoilNode* node)
         return;
     }
     
-    if(std::isnan(soilNode->getHeight()))
+    if(std::isnan(node->getHeight()))
         throw std::runtime_error("FOOOOOOOO");
     
-    geode->drawHorizontalPlane(soilNode->getHeight());
-
+    geode->drawHorizontalPlane(node->getHeight());
 }
 
 void SoilMap3dVisualization::visualizeConnection(const SoilNode* from, const SoilNode* to)

@@ -34,6 +34,11 @@ public:
         , initialPatchVariance(0.01 * 0.01)
         , allowForwardDownhill(true)
         , enableInclineLimitting(false)     
+        , useSoilInformation(false)
+        , traverseSand(true)     
+        , traverseRocks(true)
+        , traverseGravel(true)     
+        , traverseConcrete(true)  
     {};
     
     /** The maximum step height that the robot can traverse.
@@ -92,5 +97,11 @@ public:
     
     /** if true, incline limitting is enabled and the robot motion is restricted when moving on steep hills. */
     bool enableInclineLimitting;
+
+    bool useSoilInformation;
+    bool traverseSand;
+    bool traverseRocks;
+    bool traverseGravel;
+    bool traverseConcrete;
 };
 }

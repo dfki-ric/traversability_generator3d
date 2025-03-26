@@ -108,8 +108,6 @@ protected:
     
     int intersections();
 
-    bool soilGridInitialized;
-
     SoilNode* generateStartSoilNode(const Eigen::Vector3d& startPos);
 
 public:
