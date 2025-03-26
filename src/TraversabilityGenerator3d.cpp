@@ -1269,7 +1269,7 @@ void TraversabilityGenerator3d::addConnectedPatches(SoilNode *  node)
 
         if(!toAdd)
         {
-            toAdd = createSoilPatchAt(idx, curHeight);
+            //toAdd = createSoilPatchAt(idx, curHeight);
         }
 
         if(toAdd)
