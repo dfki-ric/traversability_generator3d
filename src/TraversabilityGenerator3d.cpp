@@ -93,6 +93,7 @@ Transformation TraversabilityGenerator3d::generateTransform(const Eigen::Vector3
 TraversabilityGenerator3d::~TraversabilityGenerator3d()
 {
     clearTrMap();
+    clearSoilMap();
 }
 
 void TraversabilityGenerator3d::setInitialPatch(const Eigen::Affine3d& ground2Mls, double patchRadius)
@@ -836,6 +837,7 @@ void TraversabilityGenerator3d::setMLSGrid(std::shared_ptr< traversability_gener
     soilMap.getLocalFrame() = mlsGrid->getLocalFrame();   
     
     clearTrMap();
+    clearSoilMap();
 }
 
 void TraversabilityGenerator3d::clearTrMap()
@@ -947,7 +949,7 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
         obstacleNodesGrowList.push_back(node);
         return false;
     }
-
+    
     if(!checkStepHeightAABB(node))
     {
         if(!checkStepHeightOBB(node))
@@ -958,7 +960,7 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
             return false;
         }
     } 
-
+    
     if(!isNodeFreeOfObstacles(node))
     {
         node->setType(TraversabilityNodeBase::OBSTACLE);
@@ -1391,6 +1393,12 @@ double gaussian2D(double x, double y,
     return std::exp(-0.5 * (term1 + term2));
 }
 
+void TraversabilityGenerator3d::expandSoilNodes(){
+    for (const SoilSample& sample : soilSamplesList) {
+        addSoilNode(sample);
+    }
+}
+
 bool TraversabilityGenerator3d::addSoilNode(const SoilSample& sample){
     SoilNode * sampleNode = generateStartSoilNode(sample.location);
     if(!sampleNode){
@@ -1406,6 +1414,8 @@ bool TraversabilityGenerator3d::addSoilNode(const SoilSample& sample){
     }
 
     addConnectedPatches(sampleNode);
+
+    soilSamplesList.push_back(sample);
 
     std::deque<SoilNode *> candidates;
     candidates.push_back(sampleNode);

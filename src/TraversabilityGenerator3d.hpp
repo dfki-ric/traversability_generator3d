@@ -66,6 +66,7 @@ protected:
     Eigen::Affine3d initialPatch2Mls;
     double patchRadius;
 
+    std::vector<SoilSample> soilSamplesList;
     std::vector<TravGenNode*> obstacleNodesGrowList;
     
     maps::grid::TraversabilityMap3d<TravGenNode*> trMap;
@@ -122,6 +123,8 @@ public:
 
     void setSoilType(SoilNode * node, SoilType soilType);
     bool addSoilNode(const SoilSample& sample);
+
+    void expandSoilNodes();
 
     virtual TravGenNode *generateStartNode(const Eigen::Vector3d &startPos);
     TravGenNode *findMatchingTraversabilityPatchAt(maps::grid::Index idx, const double curHeight) const;
