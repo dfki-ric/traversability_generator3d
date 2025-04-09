@@ -991,47 +991,6 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
         return false;
     }
 
-    if (config.useSoilInformation){
-        switch(soilNode->getUserData().soilType){
-            case SoilType::SAND:
-                if (!config.traverseSand){
-                    node->setType(TraversabilityNodeBase::OBSTACLE);
-                    node->getUserData().nodeType = NodeType::OBSTACLE;
-                    obstacleNodesGrowList.push_back(node);
-                    return true;
-                }
-                break;
-            case SoilType::CONCRETE:
-            if (!config.traverseConcrete){
-                node->setType(TraversabilityNodeBase::OBSTACLE);
-                node->getUserData().nodeType = NodeType::OBSTACLE;
-                obstacleNodesGrowList.push_back(node);
-            }            
-                break;
-            case SoilType::GRAVEL:
-            if (!config.traverseGravel){
-                node->setType(TraversabilityNodeBase::OBSTACLE);
-                node->getUserData().nodeType = NodeType::OBSTACLE;
-                obstacleNodesGrowList.push_back(node);
-            }
-                break;
-            case SoilType::ROCKS:
-            if (!config.traverseRocks){
-                node->setType(TraversabilityNodeBase::OBSTACLE);
-                node->getUserData().nodeType = NodeType::OBSTACLE;
-                obstacleNodesGrowList.push_back(node);
-                return true;
-            }
-                break;
-            case SoilType::UNKNOWN_SOIL:
-
-                break;
-            default:
-                break;
-        } 
-        
-    }
-
     node->setType(TraversabilityNodeBase::TRAVERSABLE);
     node->getUserData().nodeType = NodeType::TRAVERSABLE;
 
@@ -1300,6 +1259,61 @@ SoilNode *TraversabilityGenerator3d::createSoilPatchAt(maps::grid::Index idx, co
     return ret;
 }
 
+void TraversabilityGenerator3d::updateSoilInformation(){
+    for(LevelList<TravGenNode *> &l : trMap)
+    {
+        for(TravGenNode *node : l)
+        {
+            Eigen::Vector3d nodePos = node->getPosition(trMap);
+            SoilNode *soilNode = generateStartSoilNode(nodePos);
+            if (!soilNode){
+                continue;
+            }
+
+            if (config.useSoilInformation){
+                switch(soilNode->getUserData().soilType){
+                    case SoilType::SAND:
+                        if (!config.traverseSand){
+                            node->setType(TraversabilityNodeBase::OBSTACLE);
+                            node->getUserData().nodeType = NodeType::OBSTACLE;
+                            obstacleNodesGrowList.push_back(node);
+                        }
+                        break;
+                    case SoilType::CONCRETE:
+                    if (!config.traverseConcrete){
+                        node->setType(TraversabilityNodeBase::OBSTACLE);
+                        node->getUserData().nodeType = NodeType::OBSTACLE;
+                        obstacleNodesGrowList.push_back(node);
+                    }            
+                        break;
+                    case SoilType::GRAVEL:
+                    if (!config.traverseGravel){
+                        node->setType(TraversabilityNodeBase::OBSTACLE);
+                        node->getUserData().nodeType = NodeType::OBSTACLE;
+                        obstacleNodesGrowList.push_back(node);
+                    }
+                        break;
+                    case SoilType::ROCKS:
+                    if (!config.traverseRocks){
+                        node->setType(TraversabilityNodeBase::OBSTACLE);
+                        node->getUserData().nodeType = NodeType::OBSTACLE;
+                        obstacleNodesGrowList.push_back(node);
+                    }
+                        break;
+                    case SoilType::UNKNOWN_SOIL:
+        
+                        break;
+                    default:
+                        break;
+                } 
+                
+            }
+
+        }
+    }    
+    inflateObstacles();
+}
+
 SoilNode* TraversabilityGenerator3d::findMatchingSoilPatchAt(Index idx, const double curHeight) const
 {
     auto &trList(soilMap.at(idx));
@@ -1393,12 +1407,6 @@ double gaussian2D(double x, double y,
     return std::exp(-0.5 * (term1 + term2));
 }
 
-void TraversabilityGenerator3d::expandSoilNodes(){
-    for (const SoilSample& sample : soilSamplesList) {
-        addSoilNode(sample);
-    }
-}
-
 bool TraversabilityGenerator3d::addSoilNode(const SoilSample& sample){
     SoilNode * sampleNode = generateStartSoilNode(sample.location);
     if(!sampleNode){
@@ -1414,8 +1422,6 @@ bool TraversabilityGenerator3d::addSoilNode(const SoilSample& sample){
     }
 
     addConnectedPatches(sampleNode);
-
-    soilSamplesList.push_back(sample);
 
     std::deque<SoilNode *> candidates;
     candidates.push_back(sampleNode);
