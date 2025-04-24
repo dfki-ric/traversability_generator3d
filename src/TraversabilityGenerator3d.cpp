@@ -1059,6 +1059,7 @@ TravGenNode *TraversabilityGenerator3d::createTraversabilityPatchAt(maps::grid::
 
     ret = new TravGenNode(0.0, idx);
     ret->getUserData().id = currentNodeId++;
+    ret->getUserData().cost = 0;
 
     for(double height: candidates)
     {
@@ -1270,45 +1271,45 @@ void TraversabilityGenerator3d::updateSoilInformation(){
                 continue;
             }
 
-            if (config.useSoilInformation){
-                switch(soilNode->getUserData().soilType){
-                    case SoilType::SAND:
-                        if (!config.traverseSand){
-                            node->setType(TraversabilityNodeBase::OBSTACLE);
-                            node->getUserData().nodeType = NodeType::OBSTACLE;
-                            obstacleNodesGrowList.push_back(node);
-                        }
-                        break;
-                    case SoilType::CONCRETE:
+            switch(soilNode->getUserData().soilType){
+                case SoilType::SAND:
+                    node->getUserData().cost = 500 * (1.0 - soilNode->getUserData().probSand);
+                    if (!config.traverseSand){
+                        node->setType(TraversabilityNodeBase::OBSTACLE);
+                        node->getUserData().nodeType = NodeType::OBSTACLE;
+                        obstacleNodesGrowList.push_back(node);
+                    }
+                    break;
+                case SoilType::CONCRETE:
+                    node->getUserData().cost = 500 * (1.0 - soilNode->getUserData().probConcrete);
                     if (!config.traverseConcrete){
                         node->setType(TraversabilityNodeBase::OBSTACLE);
                         node->getUserData().nodeType = NodeType::OBSTACLE;
                         obstacleNodesGrowList.push_back(node);
                     }            
-                        break;
-                    case SoilType::GRAVEL:
+                    break;
+                case SoilType::GRAVEL:
+                    node->getUserData().cost = 500 * (1.0 - soilNode->getUserData().probGravel);
                     if (!config.traverseGravel){
                         node->setType(TraversabilityNodeBase::OBSTACLE);
                         node->getUserData().nodeType = NodeType::OBSTACLE;
                         obstacleNodesGrowList.push_back(node);
                     }
-                        break;
-                    case SoilType::ROCKS:
+                    break;
+                case SoilType::ROCKS:
+                    node->getUserData().cost = 500 * (1.0 - soilNode->getUserData().probRocks);
                     if (!config.traverseRocks){
                         node->setType(TraversabilityNodeBase::OBSTACLE);
                         node->getUserData().nodeType = NodeType::OBSTACLE;
                         obstacleNodesGrowList.push_back(node);
                     }
-                        break;
-                    case SoilType::UNKNOWN_SOIL:
-        
-                        break;
-                    default:
-                        break;
-                } 
-                
-            }
-
+                    break;
+                case SoilType::UNKNOWN_SOIL:
+                    node->getUserData().cost = 2000;
+                    break;
+                default:
+                    break;
+            } 
         }
     }    
     inflateObstacles();

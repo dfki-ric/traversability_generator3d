@@ -38,12 +38,14 @@ struct TravGenTrackingData
     /** continuous unique id  that can be used as index for additional metadata */
     size_t id; 
 
-    NodeType nodeType;
-
     /**Some orientations might be forbidden on this patch (e.g. due to slope). This vector
      * contains all orientations that are allowed */
     std::vector<base::AngleSegment> allowedOrientations;
     
+    NodeType nodeType;
+
+    int cost;
+
     /** Serializes the members of this class*/
     template<class Archive>
     void serialize(Archive & ar, const unsigned int version)
@@ -60,6 +62,7 @@ struct TravGenTrackingData
         ar & id;
         ar & allowedOrientations;
         ar & nodeType;
+        ar & cost;
     }
 };
 
