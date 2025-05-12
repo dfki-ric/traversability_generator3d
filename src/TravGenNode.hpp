@@ -4,6 +4,15 @@
 #include <boost/serialization/serialization.hpp>
 #include <base/Angle.hpp>
 
+namespace boost::serialization{
+    template<class Archive>
+    inline void serialize(Archive & ar, base::AngleSegment & segment, const unsigned int version){
+        ar & segment.width;
+        ar & segment.startRad;
+        ar & segment.endRad;
+    }
+}
+
 namespace traversability_generator3d
 {
 
