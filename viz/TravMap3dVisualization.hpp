@@ -34,10 +34,9 @@
 
 #if QT_VERSION >= 0x050000 || !defined(Q_MOC_RUN)
     #include <maps/grid/TraversabilityMap3d.hpp>
+    #include <traversability_generator3d/TravGenNode.hpp>
+
 #endif
-
-#include <traversability_generator3d/TravGenNode.hpp>
-
 
 namespace vizkit3d
 {

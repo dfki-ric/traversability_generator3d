@@ -1,5 +1,6 @@
 find_package(PCL 1.7 REQUIRED COMPONENTS segmentation)
 find_package(CGAL REQUIRED COMPONENTS Core)
+find_package(Boost REQUIRED COMPONENTS serialization)
 
 IF("${PCL_VERSION_MAJOR}.${PCL_VERSION_MINOR}" VERSION_LESS 1.14)
     SET(PCL_VERSION_SUFFIX "-${PCL_VERSION_MAJOR}.${PCL_VERSION_MINOR}")
@@ -20,4 +21,5 @@ rock_library(traversability_generator3d
         vizkit3d_debug_drawings-commands
     LIBS
         CGAL::CGAL
+        Boost::serialization
 )
