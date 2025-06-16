@@ -623,20 +623,10 @@ void TraversabilityGenerator3d::inflateFrontiers()
 
             expandNode = true;
 
-            switch(neighbor->getType())
+            if (neighbor->getType() == TraversabilityNodeBase::TRAVERSABLE)
             {
-                case TraversabilityNodeBase::FRONTIER:
-                    if(n->getType() == TraversabilityNodeBase::OBSTACLE){
-                        neighbor->setType(n->getType());
-                        node->getUserData().nodeType = NodeType::INFLATED_OBSTACLE;
-                    }
-                    break;
-                case TraversabilityNodeBase::TRAVERSABLE:
-                    neighbor->setType(n->getType());
-                    node->getUserData().nodeType = NodeType::INFLATED_FRONTIER;
-                    break;
-                default:
-                    break;
+                neighbor->setType(n->getType());
+                node->getUserData().nodeType = NodeType::INFLATED_FRONTIER;
             }
         });
     }
@@ -747,7 +737,8 @@ void TraversabilityGenerator3d::inflateObstacles()
             {
                 if(node->getUserData().nodeType == NodeType::TRAVERSABLE || 
                    node->getUserData().nodeType == NodeType::INFLATED_FRONTIER || 
-                   node->getUserData().nodeType == NodeType::FRONTIER)
+                   node->getUserData().nodeType == NodeType::FRONTIER ||
+                   node->getUserData().nodeType == NodeType::UNKNOWN)
                 {
                     neighbor->setType(TraversabilityNodeBase::OBSTACLE);
                     node->getUserData().nodeType = NodeType::INFLATED_OBSTACLE;
