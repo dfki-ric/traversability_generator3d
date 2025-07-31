@@ -1330,27 +1330,6 @@ SoilNode* TraversabilityGenerator3d::findMatchingSoilPatchAt(Index idx, const do
 }
 
 void TraversabilityGenerator3d::setSoilType(SoilNode * node, SoilType type){
-    switch(type)
-    {
-        //Just used to set the colors in the visualization for now
-        //TODO: Need to use the GroundNode and its GROUNDTYPE in the SoilMap3dVisualization
-        case SoilType::CONCRETE:
-            node->setType(TraversabilityNodeBase::FRONTIER);
-            break;
-        case SoilType::ROCKS:
-            node->setType(TraversabilityNodeBase::HOLE);
-            break;
-        case SoilType::SAND:
-            node->setType(TraversabilityNodeBase::TRAVERSABLE);
-            break;
-        case SoilType::GRAVEL:
-            node->setType(TraversabilityNodeBase::OBSTACLE);
-            break;
-        default:
-            node->setType(TraversabilityNodeBase::UNKNOWN);
-            break;
-    }
-
     node->getUserData().soilType = type;
 }
 
