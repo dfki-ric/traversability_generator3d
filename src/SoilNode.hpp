@@ -2,7 +2,7 @@
 #include <base/Eigen.hpp>
 #include <maps/grid/TraversabilityMap3d.hpp>
 #include <boost/serialization/serialization.hpp>
-
+#include <iostream>
 #include "SoilSample.hpp"
 
 namespace traversability_generator3d
