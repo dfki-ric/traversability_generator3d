@@ -16,6 +16,7 @@ TraversabilityGenerator3d::TraversabilityGenerator3d(const TraversabilityConfig&
     : addInitialPatch(false), config(config), patchHeight(0.02) // Set default patchHeight
 {
     trMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
+    soilMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
 
     double robotHalfLength = config.robotSizeX / 2.0;
     double robotHalfWidth = config.robotSizeY / 2.0;
@@ -92,6 +93,7 @@ Transformation TraversabilityGenerator3d::generateTransform(const Eigen::Vector3
 TraversabilityGenerator3d::~TraversabilityGenerator3d()
 {
     clearTrMap();
+    clearSoilMap();
 }
 
 void TraversabilityGenerator3d::setInitialPatch(const Eigen::Affine3d& ground2Mls, double patchRadius)
@@ -108,6 +110,11 @@ void TraversabilityGenerator3d::setInitialPatch(const Eigen::Affine3d& ground2Ml
 const maps::grid::TraversabilityMap3d<TravGenNode *> & TraversabilityGenerator3d::getTraversabilityMap() const
 {
     return trMap;
+}
+
+const maps::grid::TraversabilityMap3d<SoilNode *> & TraversabilityGenerator3d::getSoilMap() const
+{
+    return soilMap;
 }
 
 int TraversabilityGenerator3d::getNumNodes() const
@@ -354,52 +361,15 @@ bool TraversabilityGenerator3d::checkForFrontier(const TravGenNode* node)
 {
     //check direct neighborhood for missing connected patches. If
     //patches are missing, this patch is unknown
-    using maps::grid::Index;
-    const Index& index = node->getIndex();
-    for(int x = -1; x <= 1; ++x)
+
+    for(maps::grid::TraversabilityNodeBase* n : node->getConnections())
     {
-        for(int y = -1; y <= 1; ++y)
+        if(n == nullptr || n->getType() == TraversabilityNodeBase::UNKNOWN)
         {
-            if(x==0 && y==0) continue;
-            const Index neighborIndex(index.x() + x, index.y() + y);
-            const TravGenNode* neighbor = node->getConnectedNode(neighborIndex);
-            if(neighbor == nullptr || neighbor->getType() == TraversabilityNodeBase::UNKNOWN)
-            {
-                return true;
-            }
-            else
-            {
-//#ifdef ENABLE_DEBUG_DRAWINGS
-                //Draw connection to found neighbor
-//                V3DD::COMPLEX_DRAWING([&]()
-//                {
-//                    Eigen::Vector3d neighborPos(neighbor->getIndex().x() * config.gridResolution, neighbor->getIndex().y() * config.gridResolution, neighbor->getHeight());
-//                    neighborPos.x() += config.gridResolution / 2.0;
-//                    neighborPos.y() += config.gridResolution / 2.0;
-//                    neighborPos = getTraversabilityMap().getLocalFrame().inverse(Eigen::Isometry) * neighborPos;
-//                    neighborPos.z() += 0.06;
-//                    Eigen::Vector3d pos(node->getIndex().x() * config.gridResolution, node->getIndex().y() * config.gridResolution, node->getHeight());
-//                    pos.x() += config.gridResolution / 2.0;
-//                    pos.y() += config.gridResolution / 2.0;
-//                    pos = getTraversabilityMap().getLocalFrame().inverse(Eigen::Isometry) * pos;
-//                    pos.z() += 0.06;
-//                    V3DD::DRAW_LINE("neighbor connections", pos, neighborPos, V3DD::Color::magenta);
-//                });
-//#endif
-            }
+            return true;
         }
     }
-//#ifdef ENABLE_DEBUG_DRAWINGS
-//    V3DD::COMPLEX_DRAWING([&]()
-//    {
-//        Eigen::Vector3d pos(node->getIndex().x() * config.gridResolution, node->getIndex().y() * config.gridResolution, node->getHeight());
-//        pos.x() += config.gridResolution / 2.0;
-//        pos.y() += config.gridResolution / 2.0;
-//        pos = getTraversabilityMap().getLocalFrame().inverse(Eigen::Isometry) * pos;
-//        pos.z() += 0.06;
-//        V3DD::DRAW_TEXT("missingNeighboursCount", pos, "Missing Neighbors", 0.02, V3DD::Color::magenta);
-//    });
-//#endif
+
     return false;
 }
 
@@ -632,7 +602,7 @@ Polyhedron_3 TraversabilityGenerator3d::createPolyhedronFromSurfacePatch(const S
     return patch;
 }
 
-void TraversabilityGenerator3d::growNodes()
+void TraversabilityGenerator3d::inflateFrontiers()
 {
     const double growRadiusSquared = std::pow(std::sqrt(config.robotSizeX * config.robotSizeX + config.robotSizeY * config.robotSizeY) / 2.0, 2);
 
@@ -642,6 +612,9 @@ void TraversabilityGenerator3d::growNodes()
 
         n->eachConnectedNode([&](maps::grid::TraversabilityNodeBase *neighbor, bool &expandNode, bool &stop)
         {
+
+            TravGenNode* node = static_cast<TravGenNode*>(neighbor);
+
             if((neighbor->getPosition(trMap) - nodePos).squaredNorm() > growRadiusSquared)
             {
                 //node out of radius, return
@@ -650,17 +623,10 @@ void TraversabilityGenerator3d::growNodes()
 
             expandNode = true;
 
-            switch(neighbor->getType())
+            if (neighbor->getType() == TraversabilityNodeBase::TRAVERSABLE)
             {
-                case TraversabilityNodeBase::FRONTIER:
-                    if(n->getType() == TraversabilityNodeBase::OBSTACLE)
-                        neighbor->setType(n->getType());
-                    break;
-                case TraversabilityNodeBase::TRAVERSABLE:
-                    neighbor->setType(n->getType());
-                    break;
-                default:
-                    break;
+                neighbor->setType(n->getType());
+                node->getUserData().nodeType = NodeType::INFLATED_FRONTIER;
             }
         });
     }
@@ -750,9 +716,7 @@ void TraversabilityGenerator3d::expandAll(TravGenNode* startNode, const double e
         }
     }
 
-    //grow frontier nodes
-    growNodes();
-    //grow obstacle nodes
+    inflateFrontiers();
     inflateObstacles();
 
     LOG_DEBUG_S << "Expanded " << cnd << " nodes";
@@ -768,11 +732,16 @@ void TraversabilityGenerator3d::inflateObstacles()
     {
         n->eachConnectedNode([&] (maps::grid::TraversabilityNodeBase *neighbor, bool &expandNode, bool &stop)
         {
+            TravGenNode* node = static_cast<TravGenNode*>(neighbor);
             if ((n->getPosition(trMap) - neighbor->getPosition(trMap)).norm() < inflRadius)
             {
-                if(neighbor->getType() == TraversabilityNodeBase::TRAVERSABLE)
+                if(node->getUserData().nodeType == NodeType::TRAVERSABLE || 
+                   node->getUserData().nodeType == NodeType::INFLATED_FRONTIER || 
+                   node->getUserData().nodeType == NodeType::FRONTIER ||
+                   node->getUserData().nodeType == NodeType::UNKNOWN)
                 {
                     neighbor->setType(TraversabilityNodeBase::OBSTACLE);
+                    node->getUserData().nodeType = NodeType::INFLATED_OBSTACLE;
                 }
                 expandNode = true;
             }
@@ -851,18 +820,15 @@ void TraversabilityGenerator3d::setMLSGrid(std::shared_ptr< traversability_gener
         addInitialPatch = false;
     }
 
-    LOG_DEBUG_S << "Grid has size " << grid->getSize().transpose() << " resolution " << grid->getResolution().transpose();
-    LOG_DEBUG_S << "Internal resolution is " << trMap.getResolution().transpose();
     Vector2d newSize = grid->getSize().array() / trMap.getResolution().array();
-    LOG_DEBUG_S << "MLS was set " << grid->getResolution().transpose() << " " << mlsGrid->getResolution().transpose();
-
-    LOG_DEBUG_S << "New Size is " << newSize.transpose();
-
     trMap.extend(Vector2ui(newSize.x(), newSize.y()));
-
     trMap.getLocalFrame() = mlsGrid->getLocalFrame();
-
+    
+    soilMap.extend(Vector2ui(newSize.x(), newSize.y()));
+    soilMap.getLocalFrame() = mlsGrid->getLocalFrame();   
+    
     clearTrMap();
+    clearSoilMap();
 }
 
 void TraversabilityGenerator3d::clearTrMap()
@@ -870,6 +836,19 @@ void TraversabilityGenerator3d::clearTrMap()
     for(LevelList<TravGenNode *> &l : trMap)
     {
         for(TravGenNode *n : l)
+        {
+            delete n;
+        }
+
+        l.clear();
+    }
+}
+
+void TraversabilityGenerator3d::clearSoilMap()
+{
+    for(LevelList<SoilNode *> &l : soilMap)
+    {
+        for(SoilNode *n : l)
         {
             delete n;
         }
@@ -911,11 +890,39 @@ TravGenNode* TraversabilityGenerator3d::generateStartNode(const Eigen::Vector3d&
     return startNode;
 }
 
+SoilNode* TraversabilityGenerator3d::generateStartSoilNode(const Eigen::Vector3d& startPos)
+{
+    Index idx;
+    if(!soilMap.toGrid(startPos, idx))
+    {
+        LOG_INFO_S << "TraversabilityGenerator3d::generateStartSoilNode: Start position outside of map !";
+        return nullptr;
+    }
+
+    //check if not already exists...
+    SoilNode *startNode = findMatchingSoilPatchAt(idx, startPos.z());
+    if(startNode)
+    {
+        LOG_INFO_S << "TraversabilityGenerator3d::generateStartSoilNode: Using existing node ";
+        return startNode;
+    }
+
+    startNode = createSoilPatchAt(idx, startPos.z());
+    if(!startNode)
+    {
+        LOG_INFO_S << "TraversabilityGenerator3d::generateStartSoilNode: Could not create Soil Node for given start position, no matching / not enough MLS patches";
+        return startNode;
+    }
+
+    return startNode;
+}
 
 bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
 {
+    Eigen::Vector3d nodePos = node->getPosition(trMap);
+    SoilNode *soilNode = generateStartSoilNode(nodePos);
+    
     node->setExpanded();
-
     if(node->getType() == TraversabilityNodeBase::UNKNOWN)
     {
         return false;
@@ -929,23 +936,26 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
 
     if(node->getUserData().slope > config.maxSlope){
         node->setType(TraversabilityNodeBase::OBSTACLE);
+        node->getUserData().nodeType = NodeType::OBSTACLE;
         obstacleNodesGrowList.push_back(node);
         return false;
     }
-
+    
     if(!checkStepHeightAABB(node))
     {
         if(!checkStepHeightOBB(node))
         {
             node->setType(TraversabilityNodeBase::OBSTACLE);
+            node->getUserData().nodeType = NodeType::OBSTACLE;
             obstacleNodesGrowList.push_back(node);
             return false;
         }
     } 
-
-    if(!obstacleCheck(node))
+    
+    if(!isNodeFreeOfObstacles(node))
     {
         node->setType(TraversabilityNodeBase::OBSTACLE);
+        node->getUserData().nodeType = NodeType::OBSTACLE;
         obstacleNodesGrowList.push_back(node);
         return false;
     }
@@ -955,6 +965,7 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
         if(!computeAllowedOrientations(node))
         {
             node->setType(TraversabilityNodeBase::OBSTACLE);
+            node->getUserData().nodeType = NodeType::OBSTACLE;
             obstacleNodesGrowList.push_back(node);
             return false;
         }
@@ -966,16 +977,18 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
     if(checkForFrontier(node))
     {
         node->setType(TraversabilityNodeBase::FRONTIER);
+        node->getUserData().nodeType = NodeType::FRONTIER;
         frontierNodesGrowList.push_back(node);
         return false;
     }
 
     node->setType(TraversabilityNodeBase::TRAVERSABLE);
+    node->getUserData().nodeType = NodeType::TRAVERSABLE;
 
     return true;
 }
 
-bool TraversabilityGenerator3d::obstacleCheck(const traversability_generator3d::TravGenNode* node) const
+bool TraversabilityGenerator3d::isNodeFreeOfObstacles(const traversability_generator3d::TravGenNode* node) const
 {
     //check if there is an mls patch above the ground
     Eigen::Vector3d nodePos;
@@ -1037,20 +1050,24 @@ TravGenNode *TraversabilityGenerator3d::createTraversabilityPatchAt(maps::grid::
 
     ret = new TravGenNode(0.0, idx);
     ret->getUserData().id = currentNodeId++;
+    ret->getUserData().cost = 0;
 
     for(double height: candidates)
     {
         ret->setHeight(height);
         ret->setNotExpanded();
         ret->setType(TraversabilityNodeBase::UNSET);
+        ret->getUserData().nodeType = NodeType::UNSET;
 
         //there is a neighboring patch in the mls that has a reachable hight
         if(!computePlaneRansac(*ret))
         {
             if(mlsIdx.x() == 1 || mlsIdx.y() == 1) {
                 ret->setType(TraversabilityNodeBase::OBSTACLE);
+                ret->getUserData().nodeType = NodeType::OBSTACLE;
             } else {
                 ret->setType(TraversabilityNodeBase::UNKNOWN);
+                ret->getUserData().nodeType = NodeType::UNKNOWN;
             }
         }
 
@@ -1070,6 +1087,7 @@ TravGenNode *TraversabilityGenerator3d::createTraversabilityPatchAt(maps::grid::
     ret->setHeight(curHeight);
     ret->setNotExpanded();
     ret->setType(TraversabilityNodeBase::OBSTACLE);
+    ret->getUserData().nodeType = NodeType::OBSTACLE;
     trMap.at(idx).insert(ret);
     return ret;
 }
@@ -1093,7 +1111,6 @@ TravGenNode* TraversabilityGenerator3d::findMatchingTraversabilityPatchAt(Index 
             return nullptr;
         }
     }
-
     return nullptr;
 }
 
@@ -1177,5 +1194,289 @@ void TraversabilityGenerator3d::addConnectedPatches(TravGenNode *  node)
                 node->addConnection(toAdd);
         }
     }
+}
+void TraversabilityGenerator3d::addConnectedPatches(SoilNode *  node)
+{
+    static std::vector<Index> surounding = {
+        Index(1, 1),
+        Index(1, 0),
+        Index(1, -1),
+        Index(0, 1),
+        Index(0, -1),
+        Index(-1, 1),
+        Index(-1, 0),
+        Index(-1, -1)};
+
+    double curHeight = node->getHeight();
+    for(const Index &idxS : surounding)
+    {
+        const Index idx(node->getIndex() + idxS);
+
+        if(!soilMap.inGrid(idx))
+        {
+            continue;
+        }
+
+        SoilNode *toAdd = nullptr;
+        toAdd = findMatchingSoilPatchAt(idx, curHeight);
+
+        if(!toAdd)
+        {
+            //toAdd = createSoilPatchAt(idx, curHeight);
+        }
+
+        if(toAdd)
+        {
+            auto& connections = toAdd->getConnections();
+            if(std::find(connections.begin(), connections.end(), node) == connections.end())
+                toAdd->addConnection(node);
+
+            auto& connections2 = node->getConnections();
+            if(std::find(connections2.begin(), connections2.end(), toAdd) == connections2.end())
+                node->addConnection(toAdd);
+        }
+    }
+}
+
+SoilNode *TraversabilityGenerator3d::createSoilPatchAt(maps::grid::Index idx, const double curHeight)
+{
+    SoilNode *ret = nullptr;
+
+    ret = new SoilNode(curHeight, idx);
+    ret->setHeight(curHeight);
+    ret->setNotExpanded();
+    ret->setType(TraversabilityNodeBase::UNSET);
+    ret->getUserData().soilType = SoilType::UNKNOWN_SOIL;
+    soilMap.at(idx).insert(ret);
+    return ret;
+}
+
+void TraversabilityGenerator3d::updateSoilInformation(){
+    for(LevelList<TravGenNode *> &l : trMap)
+    {
+        for(TravGenNode *node : l)
+        {
+            Eigen::Vector3d nodePos = node->getPosition(trMap);
+            SoilNode *soilNode = generateStartSoilNode(nodePos);
+            if (!soilNode){
+                continue;
+            }
+
+            switch(soilNode->getUserData().soilType){
+                case SoilType::SAND:
+                    node->getUserData().cost = 500 * (1.0 - soilNode->getUserData().probSand);
+                    if (!config.traverseSand){
+                        node->setType(TraversabilityNodeBase::OBSTACLE);
+                        node->getUserData().nodeType = NodeType::OBSTACLE;
+                        obstacleNodesGrowList.push_back(node);
+                    }
+                    break;
+                case SoilType::CONCRETE:
+                    node->getUserData().cost = 500 * (1.0 - soilNode->getUserData().probConcrete);
+                    if (!config.traverseConcrete){
+                        node->setType(TraversabilityNodeBase::OBSTACLE);
+                        node->getUserData().nodeType = NodeType::OBSTACLE;
+                        obstacleNodesGrowList.push_back(node);
+                    }            
+                    break;
+                case SoilType::GRAVEL:
+                    node->getUserData().cost = 500 * (1.0 - soilNode->getUserData().probGravel);
+                    if (!config.traverseGravel){
+                        node->setType(TraversabilityNodeBase::OBSTACLE);
+                        node->getUserData().nodeType = NodeType::OBSTACLE;
+                        obstacleNodesGrowList.push_back(node);
+                    }
+                    break;
+                case SoilType::ROCKS:
+                    node->getUserData().cost = 500 * (1.0 - soilNode->getUserData().probRocks);
+                    if (!config.traverseRocks){
+                        node->setType(TraversabilityNodeBase::OBSTACLE);
+                        node->getUserData().nodeType = NodeType::OBSTACLE;
+                        obstacleNodesGrowList.push_back(node);
+                    }
+                    break;
+                case SoilType::UNKNOWN_SOIL:
+                    node->getUserData().cost = 2000;
+                    break;
+                default:
+                    break;
+            } 
+        }
+    }    
+    inflateObstacles();
+}
+
+SoilNode* TraversabilityGenerator3d::findMatchingSoilPatchAt(Index idx, const double curHeight) const
+{
+    auto &trList(soilMap.at(idx));
+
+    //check if we got an existing node
+    for(SoilNode *snode : trList)
+    {
+        const double searchHeight = snode->getHeight();
+        if(std::abs(searchHeight-curHeight) <= config.maxStepHeight)
+        {
+            //found a connectable node
+            return snode;
+        }
+
+        if(searchHeight > curHeight)
+        {
+            return nullptr;
+        }    
+    }
+
+    return nullptr;
+}
+
+void TraversabilityGenerator3d::setSoilType(SoilNode * node, SoilType type){
+    node->getUserData().soilType = type;
+}
+
+template <typename T>
+T clampE(T value, T min, T max) {
+    if (value < min) return min;
+    if (value > max) return max;
+    return value;
+}
+// Function to compute a shade of yellow as an Eigen::Vector4d (RGBA)
+Eigen::Vector4d getShadeOfYellow(double prob) {
+    prob = clampE(prob, 0.0, 1.0);                   // Clamp probability between 0.0 and 1.0
+    double intensity = prob;                         // Intensity scales with probability
+    return Eigen::Vector4d(intensity, intensity, 0.0, 1.0);  // RGB: Yellow = Red + Green, no Blue, Alpha = 1.0
+}
+
+// Function to compute a shade of gray as an Eigen::Vector4d (RGBA)
+Eigen::Vector4d getShadeOfGray(double prob) {
+    prob = clampE(prob, 0.0, 1.0);                   // Clamp probability
+    double intensity = prob;                         // Intensity scales with probability
+    return Eigen::Vector4d(intensity, intensity, intensity, 1.0);  // RGB: Equal Red, Green, Blue = Gray, Alpha = 1.0
+}
+
+// Function to compute a shade of brown as an Eigen::Vector4d (RGBA)
+Eigen::Vector4d getShadeOfBrown(double prob) {
+    prob = clampE(prob, 0.0, 1.0);                   // Clamp probability
+    double intensity = prob;                         // Intensity scales with probability
+    return Eigen::Vector4d(intensity * 0.65, intensity * 0.35, 0.0, 1.0);  // RGB: Brown is a mix of red and green with no blue
+}
+
+// Function to compute a shade of green as an Eigen::Vector4d (RGBA)
+Eigen::Vector4d getShadeOfGreen(double prob) {
+    prob = clampE(prob, 0.0, 1.0);                   // Clamp probability
+    double intensity = prob;                         // Intensity scales with probability
+    return Eigen::Vector4d(0.0, intensity, 0.0, 1.0);  // RGB: Green channel only, Alpha = 1.0
+}
+
+double gaussian2D(double x, double y, 
+                  double meanX, double meanY, 
+                  double sigmaX, double sigmaY) {
+
+    // Exponent part of the Gaussian
+    double term1 = std::pow((x - meanX) / sigmaX, 2);
+    double term2 = std::pow((y - meanY) / sigmaY, 2);
+    
+    return std::exp(-0.5 * (term1 + term2));
+}
+
+bool TraversabilityGenerator3d::addSoilNode(const SoilSample& sample){
+    SoilNode * sampleNode = generateStartSoilNode(sample.location);
+    if(!sampleNode){
+        LOG_ERROR_S << "Failed to add soil patch to the soilMap";
+        return false;
+    }
+
+    Eigen::Vector3d samplePos;
+    if(!soilMap.fromGrid(sampleNode->getIndex(), samplePos, sampleNode->getHeight()))
+    {
+        LOG_ERROR_S << "TraversabilityGenerator3d: Internal error node out of grid";
+        return false;
+    }
+
+    addConnectedPatches(sampleNode);
+
+    std::deque<SoilNode *> candidates;
+    candidates.push_back(sampleNode);
+
+    std::unordered_set<SoilNode*> expandedNodes;
+    while(!candidates.empty())
+    {
+        SoilNode *currentNode = candidates.front();
+        candidates.pop_front();   
+        if (expandedNodes.find(currentNode) != expandedNodes.end()) {
+            continue;
+        }
+        expandedNodes.insert(currentNode);
+
+        Eigen::Vector3d nodePos;
+        if(!soilMap.fromGrid(currentNode->getIndex(), nodePos, currentNode->getHeight()))
+        {
+            LOG_ERROR_S << "TraversabilityGenerator3d: Internal error node out of grid";
+            return false;
+        }
+
+        double likelihood = gaussian2D(nodePos.x(), nodePos.y(), 
+                                       samplePos.x(), samplePos.y(), 
+                                       sample.sigmaX, sample.sigmaY);
+
+        double likelihoodSand = likelihood;
+        double likelihoodConcrete = likelihood;
+        double likelihoodGravel = likelihood;
+        double likelihoodRocks = likelihood;
+
+        // Lower uncertainty means stronger adjustment
+        double reductionFactor = 0.1 + (0.8 * sample.uncertainty);
+        
+        switch (sample.type) {
+            case SoilType::SAND:
+                likelihoodConcrete *= reductionFactor;
+                likelihoodGravel *= reductionFactor;
+                likelihoodRocks *= reductionFactor;
+                break;
+            case SoilType::CONCRETE:
+                likelihoodSand *= reductionFactor;
+                likelihoodGravel *= reductionFactor;
+                likelihoodRocks *= reductionFactor;
+                break;
+            case SoilType::GRAVEL:
+                likelihoodSand *= reductionFactor;
+                likelihoodConcrete *= reductionFactor;
+                likelihoodRocks *= reductionFactor;
+                break;
+            case SoilType::ROCKS:
+                likelihoodSand *= reductionFactor;
+                likelihoodConcrete *= reductionFactor;
+                likelihoodGravel *= reductionFactor;
+                break;
+            default:
+                break;
+        }      
+        currentNode->getUserData().updateProbabilities(likelihoodSand, 
+                                                       likelihoodConcrete,
+                                                       likelihoodGravel,
+                                                       likelihoodRocks);
+
+        for (auto *neighbor : currentNode->getConnections()) {
+
+            Eigen::Vector3d neighborPos;
+            if(!soilMap.fromGrid(neighbor->getIndex(), neighborPos, neighbor->getHeight()))
+            {
+                LOG_ERROR_S << "TraversabilityGenerator3d: Internal error node out of grid";
+                return false;
+            }
+
+            double likelihood = gaussian2D(neighborPos.x(), neighborPos.y(), 
+                                           samplePos.x(), samplePos.y(), 
+                                           sample.sigmaX, sample.sigmaY);
+
+            if (likelihood < 0.05){
+                continue;
+            }
+
+            SoilNode* n = static_cast<SoilNode*>(neighbor);
+            addConnectedPatches(n);
+            candidates.push_back(n);
+        }
+    }
+    return true;
 }
 }

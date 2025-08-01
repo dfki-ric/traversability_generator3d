@@ -1,0 +1,12 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=@CMAKE_INSTALL_PREFIX@
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: @TARGET_NAME@
+Description: vizKit plugin for the traversability_generator3d library
+Requires: traversability_generator3d @PKGCONFIG_DEPS@
+Version: @PROJECT_VERSION@
+Libs: -L${libdir} -l@TARGET_NAME@
+Cflags: -I${includedir}
+

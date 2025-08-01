@@ -4,8 +4,29 @@
 #include <boost/serialization/serialization.hpp>
 #include <base/Angle.hpp>
 
+namespace boost::serialization{
+    template<class Archive>
+    inline void serialize(Archive & ar, base::AngleSegment & segment, const unsigned int version){
+        ar & segment.width;
+        ar & segment.startRad;
+        ar & segment.endRad;
+    }
+}
+
 namespace traversability_generator3d
 {
+
+enum NodeType
+{
+    OBSTACLE = 0,
+    TRAVERSABLE,
+    FRONTIER,
+    INFLATED_OBSTACLE,
+    INFLATED_FRONTIER,
+    UNKNOWN,
+    HOLE,
+    UNSET
+};
 
 /**Node struct for TraversabilityMap3d */
 struct TravGenTrackingData
@@ -25,11 +46,15 @@ struct TravGenTrackingData
     
     /** continuous unique id  that can be used as index for additional metadata */
     size_t id; 
-    
+
     /**Some orientations might be forbidden on this patch (e.g. due to slope). This vector
      * contains all orientations that are allowed */
     std::vector<base::AngleSegment> allowedOrientations;
     
+    NodeType nodeType;
+
+    int cost;
+
     /** Serializes the members of this class*/
     template<class Archive>
     void serialize(Archive & ar, const unsigned int version)
@@ -45,9 +70,42 @@ struct TravGenTrackingData
         ar & slopeDirectionAtan2;
         ar & id;
         ar & allowedOrientations;
+        ar & nodeType;
+        ar & cost;
     }
 };
 
+// Inline operator<< to print NodeType as a string
+inline std::ostream& operator<<(std::ostream& os, NodeType type)
+{
+    switch (type)
+    {
+        case NodeType::OBSTACLE: os << "OBSTACLE"; break;
+        case NodeType::TRAVERSABLE: os << "TRAVERSABLE"; break;
+        case NodeType::FRONTIER: os << "FRONTIER"; break;
+        case NodeType::INFLATED_OBSTACLE: os << "INFLATED_OBSTACLE"; break;
+        case NodeType::INFLATED_FRONTIER: os << "INFLATED_FRONTIER"; break;
+        case NodeType::UNKNOWN: os << "UNKNOWN"; break;
+        case NodeType::HOLE: os << "HOLE"; break;
+        case NodeType::UNSET: os << "UNSET"; break;
+        default: os << "INVALID_NODE_TYPE"; break;
+    }
+    return os;
+}
+
+// Inline operator== for NodeType
+inline bool operator==(NodeType lhs, NodeType rhs)
+{
+    return static_cast<int>(lhs) == static_cast<int>(rhs);
+}
+
+// Inline operator== for NodeType
+inline bool operator==(NodeType lhs, int rhs)
+{
+    return (static_cast<int>(lhs) == rhs);
+}
+
 typedef maps::grid::TraversabilityNode<TravGenTrackingData> TravGenNode;
+typedef maps::grid::TraversabilityMap3d<TravGenNode *> TravMap3d;
 
 }
