@@ -13,8 +13,9 @@ if (ROCK_QT_VERSION_4 AND vizkit3d_FOUND AND OSGVIZ_PRIMITIVES_FOUND)
             PluginLoader.cpp
             PatchesGeode.cpp
         MOC
-            TravMap3dVisualization.cpp
-            SoilMap3dVisualization.cpp
+            TravMap3dVisualization.hpp
+            SoilMap3dVisualization.hpp
+            PluginLoader.hpp
         HEADERS
             TravMap3dVisualization.hpp
             SoilMap3dVisualization.hpp
@@ -39,8 +40,9 @@ if (ROCK_QT_VERSION_5 AND vizkit3d-qt5_FOUND AND OSGVIZ_PRIMITIVES_FOUND)
             PluginLoader.cpp
             PatchesGeode.cpp
         MOC5
-            TravMap3dVisualization.cpp
-            SoilMap3dVisualization.cpp
+            TravMap3dVisualization.hpp
+            SoilMap3dVisualization.hpp
+            PluginLoader.hpp
         HEADERS
             TravMap3dVisualization.hpp
             SoilMap3dVisualization.hpp
