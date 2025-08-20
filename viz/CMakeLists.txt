@@ -16,6 +16,9 @@ if (ROCK_QT_VERSION_4 AND vizkit3d_FOUND AND OSGVIZ_PRIMITIVES_FOUND)
             TravMap3dVisualization.hpp
             SoilMap3dVisualization.hpp
             PluginLoader.hpp
+        SOURCES
+            TravMap3dVisualization.cpp
+            SoilMap3dVisualization.cpp
         HEADERS
             TravMap3dVisualization.hpp
             SoilMap3dVisualization.hpp
