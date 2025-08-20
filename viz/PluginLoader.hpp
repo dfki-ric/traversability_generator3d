@@ -24,42 +24,34 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-#include "PluginLoader.hpp"
+
+#pragma once
+
+#include <vizkit3d/Vizkit3DPlugin.hpp>
+#include "TravMap3dVisualization.hpp"
+#include "SoilMap3dVisualization.hpp"
+
+#include <QObject>
 
 namespace vizkit3d {
-    QtPluginVizkitMaps::QtPluginVizkitMaps() {}
-    QtPluginVizkitMaps::~QtPluginVizkitMaps() {}
-
-    /**
-    * Returns a list of all available visualization plugins.
-    * @return list of plugin names
-    */
-    QStringList* QtPluginVizkitMaps::getAvailablePlugins() const
+    class QtPluginVizkitMaps : public vizkit3d::VizkitPluginFactory
     {
-        QStringList *pluginNames = new QStringList();
-        pluginNames->push_back("TravMap3dVisualization");
-        pluginNames->push_back("SoilMap3dVisualization");
-        return pluginNames;
-    }
-
-    QObject* QtPluginVizkitMaps::createPlugin(QString const& pluginName)
-    {
-        vizkit3d::VizPluginBase* plugin = 0;
-        if (pluginName == "TravMap3dVisualization")
-        {
-            plugin = new TravMap3dVisualization();
-        }
-        if (pluginName == "SoilMap3dVisualization")
-        {
-            plugin = new SoilMap3dVisualization();
-        }
-        if (plugin)
-        {
-            return plugin;
-        }
-        return NULL;
-    }
-#if TRAVGEN3D_PLUGIN_QT_4
-    Q_EXPORT_PLUGIN2(QtPluginVizkitMaps, QtPluginVizkitMaps)
+        Q_OBJECT
+#if TRAVGEN3D_PLUGIN_QT_5
+	Q_PLUGIN_METADATA(IID "rock.vizkit3d.VizkitPluginFactory")
 #endif
+
+    public:
+
+        QtPluginVizkitMaps();
+        ~QtPluginVizkitMaps();
+
+        /**
+        * Returns a list of all available visualization plugins.
+        * @return list of plugin names
+        */
+        virtual QStringList* getAvailablePlugins() const override;
+
+        virtual QObject* createPlugin(QString const& pluginName) override;
+    };
 }
