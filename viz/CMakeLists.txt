@@ -12,7 +12,7 @@ endif()
 
 if (OSGVIZ_PRIMITIVES_FOUND)
     rock_qt_vizkit_plugin(
-        TARGETPREFIX vizkit3d-viz
+        TARGETPREFIX traversability_generator3d-viz
         QT4_SUFFIX ""
         MISSINGQTDEPS_NOBUILD
         SOURCES
