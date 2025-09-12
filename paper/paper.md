@@ -25,6 +25,8 @@ The library builds on this representation to provide **robot-specific traversabi
 
 The library is designed for real-world robotic applications including construction robotics, disaster response, search-and-rescue, and planetary exploration, where terrain is uneven, uncertain, and multi-layered.
 
+![Overview](figures/combined_maps.png)
+
 # Statement of need
 
 Safe and efficient navigation requires robots to distinguish **where they can move** from **where they cannot**. This is especially critical for outdoor field robots, walking excavators, and planetary rovers that face slopes, steps, loose soil, or debris.  

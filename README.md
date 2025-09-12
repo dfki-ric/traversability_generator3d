@@ -26,6 +26,18 @@ The library takes an MLS map as input and produces a `TraversabilityMap3d` enric
 - [Rock maps](https://github.com/dfki-ric/slam-maps)  
 - [vizkit3d_debug_drawings](https://github.com/rock-gui/gui-vizkit3d_debug_drawings.git) (optional, for visualization)  
 
+## Automatic Install of Dependencies & Build
+Install dependencies automatically when building traversability_generator3d. Defining `-DINSTALL_DEPS=ON` for cmake, builds and installs the source dependencies automatically. When `-DCMAKE_INSTALL_PREFIX` is used, the dependencies are also installed there. The install script generates an env.sh file in the `CMAKE_INSTALL_PREFIX` folder. It exports all neccessary environment variables.
+
+```
+git clone https://github.com/dfki-ric/traversability_generator3d.git
+cd traversability_generator3d
+mkdir build && cd build
+cmake -DINSTALL_DEPS=ON -DRUN_TESTS=ON -DCMAKE_INSTALL_PREFIX=./install ..
+make install
+source install/env.sh
+```
+
 ## Node types
 
 The core output of `traversability_generator3d` is a `TraversabilityMap3d`, where each cell is represented as a node enriched with slope, step height, soil information, etc.  
@@ -35,12 +47,12 @@ To support planning and decision-making, nodes are classified into the following
 - 🟥 **Obstacle**: There is no way that the robot can stand (with its center) on this patch.
 - 🟦 **Frontier**: Borders to the end of the map. Should be traversable (I am not 100% sure about this. check the code!)
 - 🟪 **Unknown**: This is a virtual patch that serves as boundary for algorithms. This patch does not exist in reality. Patches also become unknown if there is not enough support in the MLS to be sure that a patch exists in this location.
-- ⬛ **Hole**: This is part of the map specification but is not used by ugv_nav4d. It might be used elsewhere but the planner cannot handle it.
+- ⬛ **Hole**: This is part of the map specification but is not used by traversability_generator3d.
 - 🟨 **Unset**: This is the starting state of a new patch. It should not be visible in a fully explored map. If you see a yellow patch after map expansion is done, you have found a bug in the `TraversabilityMapGenerator` and should investigate.
 - 🟧 **Inflated Obstacle**: An obstacle patch expanded to include a safety buffer around the actual obstacle. These are not traversable.
 - <img width="28" height="28" alt="image" src="https://github.com/user-attachments/assets/775162ac-be4c-4a32-a24b-8ab41f5cea99" style="border: none;" />**Inflated Frontier**: A frontier patch that has been inflated for planning safety margins. Indicates proximity to exploration boundaries.
 
-<img width="1028" height="763" alt="image" src="https://github.com/user-attachments/assets/82e77547-74d2-40ff-9c15-a0d37f7187a1" />
+![Utah Environment](utah.png)
 
 ### Why node types matter
 
@@ -50,6 +62,28 @@ This rich classification scheme provides more than just a binary safe/unsafe map
 - Maintain safety margins by considering **inflated nodes**.  
 
 Together, these node types form the backbone of the `TraversabilityMap3d`, making it both a **planning tool** and a **research framework** for robust traversability estimation.
+
+## Run Example with Test Data  
+
+You can quickly verify the setup by downloading and running the provided test datasets.  
+
+### 1. Download the sample point clouds
+```bash
+wget https://zenodo.org/records/13771864/files/utah.ply
+wget https://zenodo.org/records/13771864/files/test_area.ply
+```
+
+### 2. Run the traversability generator
+```bash
+./traversability_generator3d_bin-qt5 utah.ply 0.3
+./traversability_generator3d_bin-qt5 test_area.ply 0.2
+```
+
+### 3. Inspect the results in the GUI
+- After the GUI loads, **left-click on the MLS map**.  
+- The corresponding **TraversabilityMap3d** will expand and display navigable vs. non-navigable regions.  
+
+> 💡 **Tip:** The second argument (`0.3` or `0.2`) specifies the resolution in meters, which controls the grid size for the MLS and traversability map.
 
 ## Acknowledgements
 
