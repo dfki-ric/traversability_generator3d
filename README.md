@@ -75,8 +75,13 @@ wget https://zenodo.org/records/13771864/files/test_area.ply
 
 ### 2. Run the traversability generator
 ```bash
-./traversability_generator3d_bin-qt5 utah.ply 0.3
-./traversability_generator3d_bin-qt5 test_area.ply 0.2
+./build/gui/traversability_generator3d_bin-qt5 utah.ply 0.3
+./build/gui/traversability_generator3d_bin-qt5 test_area.ply 0.2
+```
+
+### 3. Run the test
+```bash
+./test/test_travgen utah.ply
 ```
 
 ### 3. Inspect the results in the GUI
