@@ -12,7 +12,7 @@ authors:
 affiliations:
   - name: Robotics Innovation Center, German Research Center for Artificial Intelligence (DFKI), Bremen, Germany
     index: 1
-date: 2025-09-11
+date: 2025-09-15
 bibliography: paper.bib
 ---
 
