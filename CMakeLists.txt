@@ -32,5 +32,8 @@ rock_init()
 rock_feature(NOCURDIR)
 rock_standard_layout()
 
+if(RUN_TESTS)
 add_subdirectory(test)
+endif()
+
 add_subdirectory(gui)
