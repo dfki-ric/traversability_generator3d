@@ -79,16 +79,16 @@ wget https://zenodo.org/records/13771864/files/test_area.ply
 ./build/gui/traversability_generator3d_bin-qt5 test_area.ply 0.2
 ```
 
-### 3. Run the test
-```bash
-./test/test_travgen utah.ply
-```
-
 ### 3. Inspect the results in the GUI
 - After the GUI loads, **left-click on the MLS map**.  
 - The corresponding **TraversabilityMap3d** will expand and display navigable vs. non-navigable regions.  
 
 > 💡 **Tip:** The second argument (`0.3` or `0.2`) specifies the resolution in meters, which controls the grid size for the MLS and traversability map.
+
+### 4. Code Example
+```bash
+./test/test_travgen utah.ply
+```
 
 ## Acknowledgements
 
