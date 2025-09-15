@@ -24,7 +24,7 @@ bibliography: paper.bib
 
 # Statement of need
 
-Safe and efficient navigation requires robots to distinguish where they can move from where they cannot. This is especially critical for outdoor field robots, walking excavators, and planetary rovers that face slopes, steps, loose soil, or debris.Existing approaches often use 2.5D elevation maps [@fankhauser2018probabilistic] that store only one surface per XY cell, losing critical information when multiple layers overlap, Voxel/octree maps [@hornung2013octomap] preserve 3D structure but are memory-intensive and less tailored for traversability, and purely semantic approaches [@cramer2018traversability; @wiesmann2021traversability] that classify terrain appearance but often neglect physical constraints like slope or robot footprint.  
+Safe and efficient navigation requires robots to distinguish where they can move from where they cannot. This is especially critical for outdoor field robots, walking excavators, and planetary rovers that face slopes, steps, loose soil, or debris. Existing approaches often use 2.5D elevation maps [@fankhauser2018probabilistic] that store only one surface per XY cell, losing critical information when multiple layers overlap, voxel/octree maps [@hornung2013octomap] preserve 3D structure but are memory-intensive and less tailored for traversability, and purely semantic approaches [@cramer2018traversability; @wiesmann2021traversability] that classify terrain appearance but often neglect physical constraints like slope or robot footprint.  
 
 `traversability_generator3d` addresses these limitations by:
 
@@ -85,25 +85,25 @@ This classification provides a rich traversability map that can be exported to s
 Each cell in the `TraversabilityMap3d` is represented as a `TravGenNode` with geometric, semantic, and cost attributes.  
 Nodes are categorized as:
 
-- **TRAVERSABLE**: safe patches where the robot can move.  
-- **OBSTACLE**: unsafe regions due to excessive slope, step height, body collisions, or forbidden soil.  
-- **FRONTIER**: expansion boundaries between known and unknown areas.  
-- **INFLATED_OBSTACLE**: obstacles grown outward to include robot footprint.  
-- **INFLATED_FRONTIER**: expanded frontiers with safety margins.  
-- **UNKNOWN**: regions with insufficient or missing MLS data.  
-- **HOLE**: gaps where too few patches exist to support safe navigation.  
-- **UNSET**: unclassified nodes during initialization.  
+- `TRAVERSABLE`: safe patches where the robot can move.  
+- `OBSTACLE`: unsafe regions due to excessive slope, step height, body collisions, or forbidden soil.  
+- `FRONTIER`: expansion boundaries between known and unknown areas.  
+- `INFLATED_OBSTACLE`: obstacles grown outward to include robot footprint.  
+- `INFLATED_FRONTIER`: expanded frontiers with safety margins.  
+- `UNKNOWN`: regions with insufficient or missing MLS data.  
+- `HOLE`: gaps where too few patches exist to support safe navigation.  
+- `UNSET`: unclassified nodes during initialization.  
 
 This classification enables downstream planners to reason not only about safe/unsafe areas but also about uncertainty and exploration frontiers.
 
 # Soil-aware traversability
 
-In addition to geometry, `traversability_generator3d` models soil composition. Each `SoilNode` stores probability distributions over soil types. Costs are adapted as follows:
+In addition to geometry, `traversability_generator3d` models soil composition. Each `SoilNode` stores probability distributions over soil types. By default, costs are adapted as follows: 
 
-- **Concrete**: low cost (preferred).  
-- **Sand/Gravel**: higher cost (risky terrain).  
-- **Rocks**: costly or forbidden depending on configuration.  
-- **Unknown soil**: assigned maximum cost.  
+- `Concrete`: low cost (preferred).  
+- `Sand/Gravel`: higher cost (risky terrain).  
+- `Rocks`: costly or forbidden depending on configuration.  
+- `Unknown soil`: assigned maximum cost.  
 
 Through configuration, users can forbid traversal on certain soils, automatically converting affected nodes to obstacles. This enables integration of perceptual information (e.g. from ground-penetrating radar, visual classifiers, or tactile sensors) with geometric terrain reasoning.
 
