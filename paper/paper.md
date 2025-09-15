@@ -20,7 +20,7 @@ bibliography: paper.bib
 
 `traversability_generator3d` is a C++ library that converts Multi-Level Surface (MLS) [@triebel2006multilevel] maps into 3D traversability maps. Unlike traditional 2D elevation-based maps, MLS preserves multiple surface hypotheses per cell, making it well-suited for environments with rubble, vegetation, bridges, or overlapping terrain layers. The library builds on the MLS representation to provide robot-specific traversability analysis where each grid cell is enriched with slope, step height, plane fitting results, allowed motion orientations, and optional soil semantics. The result is a `TraversabilityMap3d` suitable for autonomous navigation. The library is designed for real-world robotic applications including construction robotics, disaster response, search-and-rescue, and planetary exploration, where terrain is uneven, uncertain, and multi-layered.
 
-![Overview](figures/combined_maps.png)
+![Comparison between the original Multi-Level Surface (MLS) map (left) and the generated TraversabilityMap3d (right). The MLS encodes the underlying 3D terrain structure, whereas the TraversabilityMap3d highlights navigable and non-navigable regions for path planning.](figures/combined_map.png)
 
 # Statement of need
 
@@ -32,13 +32,7 @@ Safe and efficient navigation requires robots to distinguish where they can move
 - Performing plane fitting and slope analysis per patch, allowing orientation-dependent motion constraints.  
 - Checking step height and body collisions with robot-specific geometry (AABB/OBB checks).  
 - Supporting soil-aware traversability, where semantic labels (sand, gravel, rocks, concrete) are integrated with uncertainty.  
-- Producing a 3D traversability map with rich node types that planners can use directly.  
-
-This makes it a valuable standalone module for research and deployment in outdoor navigation pipelines.
-
-# Functionality
-
-`traversability_generator3d` is designed as a modular C++ library with clearly separated responsibilities. Its core functionality is to transform raw MLS maps into rich 3D traversability maps that encode both geometric safety and semantic information for mobile robots.  
+- Producing a 3D traversability map with rich node types that planners can use directly.   
 
 ## Input
 
