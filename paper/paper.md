@@ -120,7 +120,7 @@ Through configuration, users can forbid traversal on certain soils, automaticall
 
 # Acknowledgements
 
-The traversability_generator3d library was initiated and is currently developed at the Robotics Innovation Center of the German Research Center for Artificial Intelligence (DFKI) in Bremen, together with the Robotics Group of the University of Bremen. The development was started in the scope of the Entern project (50RA1406), which has been funded by the German Aerospace Center (DLR) with funds from the German Federal Ministry for Economic Affairs and Climate Action (BMWK). 
+The traversability_generator3d library was initiated and is being developed at the Robotics Innovation Center of the German Research Center for Artificial Intelligence (DFKI) in Bremen, in close collaboration with the Robotics Group of the University of Bremen. Its development began within the framework of the Entern project (grant no. 50RA1406) and has since been advanced in the context of Robdekon2 (grant no. 13N16537). The work has been supported by the German Aerospace Center (DLR) with funding from the German Federal Ministry for Economic Affairs and Climate Action (BMWK) as well as by the German Federal Ministry of Education and Research (BMBF). 
 
 We would also like to acknowledge the contributors of the traversability_generator3d repository, including the developers visible on the project's GitHub contributors page, for their valuable efforts and dedication. 
 
