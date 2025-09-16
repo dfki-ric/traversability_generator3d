@@ -87,7 +87,7 @@ wget https://zenodo.org/records/13771864/files/test_area.ply
 
 ### 4. Code Example
 ```bash
-./test/test_travgen utah.ply
+./build/test/test_travgen utah.ply
 ```
 
 ## Acknowledgements
