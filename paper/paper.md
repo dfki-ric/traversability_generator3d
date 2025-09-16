@@ -76,10 +76,6 @@ The result is a `TraversabilityMap3d` structure with two layers:
 - Geometric traversability (`TravGenNode`) containing slope, plane, step height, allowed orientations, cost, and node type.  
 - Soil traversability (`SoilNode`) containing soil type probabilities and semantic costs.  
 
-Each node is classified into categories (`TRAVERSABLE`, `OBSTACLE`, `FRONTIER`, `INFLATED_OBSTACLE`, `INFLATED_FRONTIER`, `UNKNOWN`, `HOLE`, `UNSET`).  
-
-This classification provides a rich traversability map that can be exported to standard 2D costmaps (e.g. for ROS2 Nav2) or directly consumed by custom planners.  
-
 # Traversability node types
 
 Each cell in the `TraversabilityMap3d` is represented as a `TravGenNode` with geometric, semantic, and cost attributes.  
@@ -94,6 +90,12 @@ Nodes are categorized as:
 - `HOLE`: gaps where too few patches exist to support safe navigation.  
 - `UNSET`: unclassified nodes during initialization.  
 
+<div align="center">
+  <img src="figures/traversability_map_nodes.png" alt="TraversabilityMap3d." width="400"/>
+  
+  <p>Figure: Traversability map with semantic node classifications.</p>
+</div>
+
 This classification enables downstream planners to reason not only about safe/unsafe areas but also about uncertainty and exploration frontiers.
 
 # Soil-aware traversability
@@ -104,6 +106,13 @@ In addition to geometry, `traversability_generator3d` models soil composition. E
 - `Sand/Gravel`: higher cost (risky terrain).  
 - `Rocks`: costly or forbidden depending on configuration.  
 - `Unknown soil`: assigned maximum cost.  
+
+<div align="center">
+  <img src="figures/soilmap.png" alt="SoilMap3d." width="400"/>
+  
+  <p>Figure: Map layers for terrain assessment. Left: Traversability map showing navigable (green) and obstacle (red) regions. Middle: Soil map with sand (yellow), gravel (green), and unknown (light blue). Right: Fused soil–traversability map, where sand is treated as non-traversable and thus marked as obstacle (red).</p>
+</div>
+
 
 Through configuration, users can forbid traversal on certain soils, automatically converting affected nodes to obstacles. This enables integration of perceptual information (e.g. from ground-penetrating radar, visual classifiers, or tactile sensors) with geometric terrain reasoning.
 
