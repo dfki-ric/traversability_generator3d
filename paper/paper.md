@@ -9,6 +9,9 @@ authors:
   - name: Muhammad Haider Khan Lodhi
     orcid: 0009-0008-1199-3489
     affiliation: 1
+  - name: Christoph Hertzberg
+    orcid: 0009-0005-6467-0286
+    affiliation: 1
 affiliations:
   - name: Robotics Innovation Center, German Research Center for Artificial Intelligence (DFKI), Bremen, Germany
     index: 1
