@@ -28,11 +28,11 @@ Safe and efficient navigation requires robots to distinguish where they can move
 
 `traversability_generator3d` addresses these limitations by:
 
-- Taking MLS as input, retaining multi-level terrain structure.  
-- Performing plane fitting and slope analysis per patch, allowing orientation-dependent motion constraints.  
-- Checking step height and body collisions with robot-specific geometry (AABB/OBB checks).  
-- Supporting soil-aware traversability, where semantic labels (sand, gravel, rocks, concrete) are integrated with uncertainty.  
-- Producing a 3D traversability map with rich node types that planners can use directly.   
+- Taking MLS as input, retaining multi-level terrain structure.
+- Performing plane fitting and slope analysis per patch, allowing orientation-dependent motion constraints.
+- Checking step height and body collisions with robot-specific geometry (AABB/OBB checks).
+- Supporting soil-aware traversability, where semantic labels (sand, gravel, rocks, concrete) are integrated with uncertainty.
+- Producing a 3D traversability map with rich node types that planners can use directly.  
 
 ## Input
 
@@ -64,16 +64,16 @@ The traversability generation proceeds in several stages:
 
 5. Soil-aware traversability
 
-   - In addition to geometry, the library maintains a parallel `TraversabilityMap3d<SoilNode*>` to model soil types.  
+   - In addition to geometry, the library maintains a parallel `TraversabilityMap3d<SoilNode*>` to model soil types.
    - Soil samples (sand, gravel, rocks, concrete) can be injected with associated uncertainty.
    - A Gaussian propagation mechanism distributes soil probabilities spatially, and costs are updated accordingly.
-   - Certain soils may be forbidden entirely (e.g., robots not allowed to enter sand), in which case nodes are automatically converted to obstacles.  
+   - Certain soils may be forbidden entirely (e.g., robots not allowed to enter sand), in which case nodes are automatically converted to obstacles.
 
 6. Map expansion
 
    - The library grows the traversability map outward from user-defined start nodes.
    - Unknown areas are classified as `FRONTIER` nodes, guiding exploration.
-   - Expansion can be bounded by distance to restrict computation to a region of interest.  
+   - Expansion can be bounded by distance to restrict computation to a region of interest.
 
 ## Output
 
@@ -87,14 +87,14 @@ The result is a `TraversabilityMap3d` structure with two layers:
 Each cell in the `TraversabilityMap3d` is represented as a `TravGenNode` with geometric, semantic, and cost attributes.  
 Nodes are categorized as:
 
-- `TRAVERSABLE`: safe patches where the robot can move.  
-- `OBSTACLE`: unsafe regions due to excessive slope, step height, body collisions, or forbidden soil.  
-- `FRONTIER`: expansion boundaries between known and unknown areas.  
-- `INFLATED_OBSTACLE`: obstacles grown outward to include robot footprint.  
-- `INFLATED_FRONTIER`: expanded frontiers with safety margins.  
-- `UNKNOWN`: regions with insufficient or missing MLS data.  
-- `HOLE`: gaps where too few patches exist to support safe navigation.  
-- `UNSET`: unclassified nodes during initialization.  
+- `TRAVERSABLE`: safe patches where the robot can move.
+- `OBSTACLE`: unsafe regions due to excessive slope, step height, body collisions, or forbidden soil.
+- `FRONTIER`: expansion boundaries between known and unknown areas.
+- `INFLATED_OBSTACLE`: obstacles grown outward to include robot footprint.
+- `INFLATED_FRONTIER`: expanded frontiers with safety margins.
+- `UNKNOWN`: regions with insufficient or missing MLS data.
+- `HOLE`: gaps where too few patches exist to support safe navigation.
+- `UNSET`: unclassified nodes during initialization.
 
 ![Traversability map with semantic node classifications.](figures/traversability_map_nodes.png)
 
@@ -104,13 +104,12 @@ This classification enables downstream planners to reason not only about safe/un
 
 In addition to geometry, `traversability_generator3d` models soil composition. Each `SoilNode` stores probability distributions over soil types. By default, costs are adapted as follows: 
 
-- `Concrete`: low cost (preferred).  
-- `Sand/Gravel`: higher cost (risky terrain).  
-- `Rocks`: costly or forbidden depending on configuration.  
-- `Unknown soil`: assigned maximum cost.  
+- `Concrete`: low cost (preferred).
+- `Sand/Gravel`: higher cost (risky terrain).
+- `Rocks`: costly or forbidden depending on configuration.
+- `Unknown soil`: assigned maximum cost.
 
 ![Map layers for terrain assessment. Left: Traversability map showing navigable (green) and obstacle (red) regions. Middle: Soil map with sand (yellow), gravel (green), and unknown (light blue). Right: Fused soil–traversability map, where sand is treated as non-traversable and thus marked as obstacle (red).](figures/soilmap.png)
-
 
 Through configuration, users can forbid traversal on certain soils, automatically converting affected nodes to obstacles. This enables integration of perceptual information (e.g. from ground-penetrating radar, visual classifiers, or tactile sensors) with geometric terrain reasoning.
 
