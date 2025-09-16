@@ -93,6 +93,13 @@ void TraversabilityGenerator3dGui::setupTravGen(int argc, char** argv)
     travConfig.allowForwardDownhill = true;
     travConfig.enableInclineLimitting = false;
 
+    if (travConfig.gridResolution >= std::min(travConfig.robotSizeX, travConfig.robotSizeY)) {
+        LOG_WARN_S << "Grid resolution (" << travConfig.gridResolution
+                  << " m) is greater than or equal to the robot footprint size ("
+                  << std::min(travConfig.robotSizeX, travConfig.robotSizeY)
+                  << " m). Results may be inaccurate. Please use a smaller resolution.";
+    }
+
     travGen.reset(new traversability_generator3d::TraversabilityGenerator3d(travConfig));
 
     if(argc > 1)
