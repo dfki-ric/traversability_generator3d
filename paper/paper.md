@@ -43,37 +43,43 @@ The library consumes Multi-Level Surface (MLS) maps, which store multiple surfac
 The traversability generation proceeds in several stages:
 
 1. Plane fitting and slope estimation  
-   - Local surface patches are extracted from the MLS and fitted with planes using RANSAC (via PCL).  
-   - Each patch’s slope angle and slope direction are computed from the fitted plane normal.  
+
+   - Local surface patches are extracted from the MLS and fitted with planes using RANSAC (via PCL).
+   - Each patch’s slope angle and slope direction are computed from the fitted plane normal.
 
 2. Step height evaluation  
-   - Both axis-aligned (AABB) and oriented bounding box (OBB) checks are performed to test whether nearby patches exceed the robot’s configured maximum step height.  
-   - This ensures that steps or discontinuities larger than the robot’s physical capability are marked as obstacles.  
+
+   - Both axis-aligned (AABB) and oriented bounding box (OBB) checks are performed to test whether nearby patches exceed the robot’s configured maximum step height.
+   - This ensures that steps or discontinuities larger than the robot’s physical capability are marked as obstacles.
 
 3. Orientation-dependent traversability
-   - On steep slopes, the library restricts the allowed orientations of motion (incline limiting).  
-   - For example, forward uphill/downhill motion may be permitted.  
+
+   - On steep slopes, the library restricts the allowed orientations of motion (incline limiting).
+   - For example, forward uphill/downhill motion may be permitted.
 
 4. Footprint-aware obstacle inflation 
-   - Obstacles and frontiers are grown outward by the robot’s footprint radius.  
-   - This guarantees that planned paths account for the full robot body, not just its center point.  
+
+   - Obstacles and frontiers are grown outward by the robot’s footprint radius.
+   - This guarantees that planned paths account for the full robot body, not just its center point.
 
 5. Soil-aware traversability
+
    - In addition to geometry, the library maintains a parallel `TraversabilityMap3d<SoilNode*>` to model soil types.  
-   - Soil samples (sand, gravel, rocks, concrete) can be injected with associated uncertainty.  
-   - A Gaussian propagation mechanism distributes soil probabilities spatially, and costs are updated accordingly.  
+   - Soil samples (sand, gravel, rocks, concrete) can be injected with associated uncertainty.
+   - A Gaussian propagation mechanism distributes soil probabilities spatially, and costs are updated accordingly.
    - Certain soils may be forbidden entirely (e.g., robots not allowed to enter sand), in which case nodes are automatically converted to obstacles.  
 
 6. Map expansion
-   - The library grows the traversability map outward from user-defined start nodes.  
-   - Unknown areas are classified as `FRONTIER` nodes, guiding exploration.  
+
+   - The library grows the traversability map outward from user-defined start nodes.
+   - Unknown areas are classified as `FRONTIER` nodes, guiding exploration.
    - Expansion can be bounded by distance to restrict computation to a region of interest.  
 
 ## Output
 
 The result is a `TraversabilityMap3d` structure with two layers:  
 
-- Geometric traversability (`TravGenNode`) containing slope, plane, step height, allowed orientations, cost, and node type.  
+- Geometric traversability (`TravGenNode`) containing slope, plane, step height, allowed orientations, cost, and node type.
 - Soil traversability (`SoilNode`) containing soil type probabilities and semantic costs.  
 
 # Traversability node types
