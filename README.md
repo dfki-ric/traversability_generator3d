@@ -78,6 +78,7 @@ wget https://zenodo.org/records/13771864/files/test_area.ply
 ./build/gui/traversability_generator3d_bin-qt5 utah.ply 0.3
 ./build/gui/traversability_generator3d_bin-qt5 test_area.ply 0.2
 ```
+> 💡 **Tip:** The following enviroment variables can be used to control the behaviour of the logger: **BASE_LOG_LEVEL** Set to one of DEBUG, INFO, WARN, ERROR or FATAL to define the maximum logging level.
 
 ### 3. Inspect the results in the GUI
 - After the GUI loads, **left-click on the MLS map**.  
