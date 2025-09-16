@@ -42,6 +42,8 @@ The library consumes Multi-Level Surface (MLS) maps, which store multiple surfac
 
 The traversability generation proceeds in several stages:
 
+![Traversability generation pipeline showing plane fitting, step height checks, orientation limits, footprint inflation, soil integration, and map expansion.](figures/pipeline.png)
+
 1. Plane fitting and slope estimation  
 
    - Local surface patches are extracted from the MLS and fitted with planes using RANSAC (via PCL).
