@@ -90,11 +90,7 @@ Nodes are categorized as:
 - `HOLE`: gaps where too few patches exist to support safe navigation.  
 - `UNSET`: unclassified nodes during initialization.  
 
-<div align="center">
-  <img src="figures/traversability_map_nodes.png" alt="TraversabilityMap3d." width="400"/>
-  
-  <p>Figure: Traversability map with semantic node classifications.</p>
-</div>
+![Figure: Traversability map with semantic node classifications.](figures/traversability_map_nodes.png)
 
 This classification enables downstream planners to reason not only about safe/unsafe areas but also about uncertainty and exploration frontiers.
 
@@ -107,11 +103,7 @@ In addition to geometry, `traversability_generator3d` models soil composition. E
 - `Rocks`: costly or forbidden depending on configuration.  
 - `Unknown soil`: assigned maximum cost.  
 
-<div align="center">
-  <img src="figures/soilmap.png" alt="SoilMap3d." width="400"/>
-  
-  <p>Figure: Map layers for terrain assessment. Left: Traversability map showing navigable (green) and obstacle (red) regions. Middle: Soil map with sand (yellow), gravel (green), and unknown (light blue). Right: Fused soil–traversability map, where sand is treated as non-traversable and thus marked as obstacle (red).</p>
-</div>
+![Figure: Map layers for terrain assessment. Left: Traversability map showing navigable (green) and obstacle (red) regions. Middle: Soil map with sand (yellow), gravel (green), and unknown (light blue). Right: Fused soil–traversability map, where sand is treated as non-traversable and thus marked as obstacle (red).](figures/soilmap.png)
 
 
 Through configuration, users can forbid traversal on certain soils, automatically converting affected nodes to obstacles. This enables integration of perceptual information (e.g. from ground-penetrating radar, visual classifiers, or tactile sensors) with geometric terrain reasoning.
