@@ -12,6 +12,10 @@ authors:
   - name: Christoph Hertzberg
     orcid: 0009-0005-6467-0286
     affiliation: 1
+  - name: Arne Böckmann
+    affiliation: 1
+  - name: Janosch Machowinski
+    affiliation: 1
 affiliations:
   - name: Robotics Innovation Center, German Research Center for Artificial Intelligence (DFKI), Bremen, Germany
     index: 1
@@ -118,10 +122,16 @@ In addition to geometry, `traversability_generator3d` models soil composition. E
 
 Through configuration, users can forbid traversal on certain soils, automatically converting affected nodes to obstacles. This enables integration of perceptual information (e.g. from ground-penetrating radar, visual classifiers, or tactile sensors) with geometric terrain reasoning.
 
+# Field Tests
+
+The `traversability_generator3d` library has been used extensively in research projects for almost a decade. It has supported autonomous navigation in several projects, including Entern, ANT, VIPE, KIMMI-SF, HiSE, PerSim, CoRobX, Robdekon2, and NoStrandAMust.
+
+As a versatile component for terrain assessment, it has also been applied on a wide range of terrestrial robots at the DFKI Robotics Innovation Center (RIC), such as Artemis, Arter, Coyote-III, Crex, Charlie, Hunter-SE, SherpaTT, and Asguard-IV.
+
 # Acknowledgements
 
-The traversability_generator3d library was initiated and is being developed at the Robotics Innovation Center of the German Research Center for Artificial Intelligence (DFKI) in Bremen, in close collaboration with the Robotics Group of the University of Bremen. Its development began within the framework of the Entern project (grant no. 50RA1406) and has since been advanced in the context of Robdekon2 (grant no. 13N16537). The work has been supported by the German Aerospace Center (DLR) with funding from the German Federal Ministry for Economic Affairs and Climate Action (BMWK) as well as by the German Federal Ministry of Education and Research (BMBF). 
+The `traversability_generator3d` library was initiated and is being developed at the Robotics Innovation Center of the German Research Center for Artificial Intelligence (DFKI) in Bremen, in close collaboration with the Robotics Group of the University of Bremen. Its development began within the framework of the Entern project (grant no. 50RA1406) and has since been further advanced in the context of Robdekon2 (grant no. 13N16537) and NoStrandAMust (grant no. 50RA2122). The work has been supported by the German Aerospace Center (DLR) with funding from the German Federal Ministry for Economic Affairs and Climate Action (BMWK) as well as by the German Federal Ministry of Education and Research (BMBF).
 
-We would also like to acknowledge the contributors of the traversability_generator3d repository, including the developers visible on the project's GitHub contributors page, for their valuable efforts and dedication. 
+We would also like to acknowledge the contributors of the `traversability_generator3d` repository, including the developers visible on the project's GitHub contributors page, for their valuable efforts and dedication. 
 
 # References
