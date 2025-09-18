@@ -13,12 +13,14 @@ authors:
     orcid: 0009-0005-6467-0286
     affiliation: 1
   - name: Arne Böckmann
-    affiliation: 1
+    affiliation: 2
   - name: Janosch Machowinski
-    affiliation: 1
+    affiliation: 2
 affiliations:
   - name: Robotics Innovation Center, German Research Center for Artificial Intelligence (DFKI), Bremen, Germany
     index: 1
+  - name: Cellumation GmbH
+    index: 2
 date: 2025-09-15
 bibliography: paper.bib
 ---
