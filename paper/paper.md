@@ -21,7 +21,7 @@ affiliations:
     index: 1
   - name: Cellumation GmbH
     index: 2
-date: 2025-09-15
+date: 2025-09-22
 bibliography: paper.bib
 ---
 
@@ -122,7 +122,7 @@ In addition to geometry, `traversability_generator3d` models soil composition. E
 - `Rocks`: costly or forbidden depending on configuration.
 - `Unknown soil`: assigned maximum cost.
 
-![Map layers for terrain assessment. Left: Traversability map showing navigable (green) and obstacle (red) regions. Middle: Soil map with sand (yellow), gravel (green), and unknown (light blue). Right: Fused soil–traversability map, where sand is treated as non-traversable and thus marked as obstacle (red).](figures/soilmap.png)
+![Map layers for terrain assessment. [Crex](https://robotik.dfki-bremen.de/de/forschung/robotersysteme/crex) explores the environment and generates both a multi-level surface (MLS) map and a soil map. Left: MLS converted into a Crex traversability map with smaller obstacle inflation due to the small robot size. Middle: Soil map with sand (yellow), gravel (green), and unknown (light blue). Right: MLS converted into an [Artemis](https://robotik.dfki-bremen.de/de/forschung/robotersysteme/artemis) traversability map fused with soil information, where sand is treated as non-traversable and thus marked as obstacle (red), with larger inflation adjusted for the bigger robot footprint.](figures/soilmap.png)
 
 Through configuration, users can forbid traversal on certain soils, automatically converting affected nodes to obstacles. This enables integration of perceptual information (e.g. from ground-penetrating radar, visual classifiers, or tactile sensors) with geometric terrain reasoning.
 
