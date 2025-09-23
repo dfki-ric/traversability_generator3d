@@ -106,7 +106,6 @@ Nodes are categorized as:
 - `INFLATED_OBSTACLE`: obstacles grown outward to include robot footprint.
 - `INFLATED_FRONTIER`: expanded frontiers with safety margins.
 - `UNKNOWN`: regions with insufficient or missing MLS data.
-- `HOLE`: gaps where too few patches exist to support safe navigation.
 - `UNSET`: unclassified nodes during initialization.
 
 ![Traversability map with semantic node classifications.](figures/traversability_map_nodes.png)
