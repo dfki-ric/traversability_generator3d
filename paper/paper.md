@@ -100,7 +100,7 @@ The result is a `TraversabilityMap3d` structure with two layers:
 Each cell in the `TraversabilityMap3d` is represented as a `TravGenNode` with geometric, semantic, and cost attributes.  
 Nodes are categorized as:
 
-- `TRAVERSABLE`: safe patches where the robot can move.
+- `TRAVERSABLE`: patches where the robot can safely move.
 - `OBSTACLE`: unsafe regions due to excessive slope, step height, body collisions, or forbidden soil.
 - `FRONTIER`: expansion boundaries between known and unknown areas.
 - `INFLATED_OBSTACLE`: obstacles grown outward to include robot footprint.
