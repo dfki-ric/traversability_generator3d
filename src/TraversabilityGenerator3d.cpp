@@ -1350,41 +1350,8 @@ void TraversabilityGenerator3d::setSoilType(SoilNode * node, SoilType type){
     node->getUserData().soilType = type;
 }
 
-template <typename T>
-T clampE(T value, T min, T max) {
-    if (value < min) return min;
-    if (value > max) return max;
-    return value;
-}
-// Function to compute a shade of yellow as an Eigen::Vector4d (RGBA)
-Eigen::Vector4d getShadeOfYellow(double prob) {
-    prob = clampE(prob, 0.0, 1.0);                   // Clamp probability between 0.0 and 1.0
-    double intensity = prob;                         // Intensity scales with probability
-    return Eigen::Vector4d(intensity, intensity, 0.0, 1.0);  // RGB: Yellow = Red + Green, no Blue, Alpha = 1.0
-}
 
-// Function to compute a shade of gray as an Eigen::Vector4d (RGBA)
-Eigen::Vector4d getShadeOfGray(double prob) {
-    prob = clampE(prob, 0.0, 1.0);                   // Clamp probability
-    double intensity = prob;                         // Intensity scales with probability
-    return Eigen::Vector4d(intensity, intensity, intensity, 1.0);  // RGB: Equal Red, Green, Blue = Gray, Alpha = 1.0
-}
-
-// Function to compute a shade of brown as an Eigen::Vector4d (RGBA)
-Eigen::Vector4d getShadeOfBrown(double prob) {
-    prob = clampE(prob, 0.0, 1.0);                   // Clamp probability
-    double intensity = prob;                         // Intensity scales with probability
-    return Eigen::Vector4d(intensity * 0.65, intensity * 0.35, 0.0, 1.0);  // RGB: Brown is a mix of red and green with no blue
-}
-
-// Function to compute a shade of green as an Eigen::Vector4d (RGBA)
-Eigen::Vector4d getShadeOfGreen(double prob) {
-    prob = clampE(prob, 0.0, 1.0);                   // Clamp probability
-    double intensity = prob;                         // Intensity scales with probability
-    return Eigen::Vector4d(0.0, intensity, 0.0, 1.0);  // RGB: Green channel only, Alpha = 1.0
-}
-
-double gaussian2D(double x, double y, 
+double TraversabilityGenerator3d::gaussian2D(double x, double y, 
                   double meanX, double meanY, 
                   double sigmaX, double sigmaY) {
 
@@ -1394,6 +1361,7 @@ double gaussian2D(double x, double y,
     
     return std::exp(-0.5 * (term1 + term2));
 }
+
 
 bool TraversabilityGenerator3d::addSoilNode(const SoilSample& sample){
     SoilNode* sampleNode = generateStartSoilNode(sample.location);
