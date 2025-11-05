@@ -32,7 +32,6 @@ rock_qt_library(
                        pcl_io${PCL_VERSION_SUFFIX}
     DEPS_PKGCONFIG_QT  vizkit3d
                        vizkit3d-viz
-                       traversability_generator3d-viz
                        maps-viz
                        base-viz
                        ${DEPS_PKGCONFIG_QT}
@@ -45,7 +44,7 @@ rock_qt_executable(
     SOURCES
         Main.cpp
     DEPS traversability_generator3d
-    DEPS_QT traversability_generator3d_gui
+    DEPS_QT traversability_generator3d_gui traversability_generator3d-viz
 )
 
 if(TARGET traversability_generator3d_gui)
