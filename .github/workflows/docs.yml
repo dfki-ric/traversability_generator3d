@@ -26,9 +26,6 @@ jobs:
         # build the doxyfile
         cmake -Bbuild . || true  # building doc does not need build deps
 
-    - name: move doc with figures into a tmp folder
-      run: mv doc doc_tmp
-
     - name: Generate Doxygen Documentation
       run: doxygen build/Doxyfile
       shell: bash
@@ -36,9 +33,6 @@ jobs:
     - name: Create .nojekyll (ensures pages with underscores work on gh pages)
       run: touch doc/.nojekyll
       shell: bash
-
-    - name: move figures into the actual doc
-      run: mv doc_tmp doc/doc
 
     - name: Deploy to GitHub Pages
       uses: JamesIves/github-pages-deploy-action@v4
