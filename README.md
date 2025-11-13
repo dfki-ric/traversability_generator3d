@@ -22,6 +22,7 @@ The library takes an MLS map as input and produces a `TraversabilityMap3d` enric
 - [PCL (>=1.7)](https://pointclouds.org/) with segmentation module  
 - [CGAL](https://www.cgal.org/) (Core)  
 - [Boost.Serialization](https://www.boost.org/)  
+- [OpenSceneGraph](http://www.openscenegraph.org/)
 - [Rock base-types](https://github.com/rock-core/base-types)  
 - [Rock maps](https://github.com/dfki-ric/slam-maps)  
 - [vizkit3d_debug_drawings](https://github.com/rock-gui/gui-vizkit3d_debug_drawings.git) (optional, for visualization)  
