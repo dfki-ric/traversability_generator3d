@@ -30,7 +30,7 @@ The library takes an MLS map as input and produces a `TraversabilityMap3d` enric
 Install dependencies automatically when building traversability_generator3d. Defining `-DINSTALL_DEPS=ON` for cmake, builds and installs the source dependencies automatically. When `-DCMAKE_INSTALL_PREFIX` is used, the dependencies are also installed there. The install script generates an env.sh file in the `CMAKE_INSTALL_PREFIX` folder. It exports all neccessary environment variables.
 
 ```
-git clone https://github.com/dfki-ric/traversability_generator3d.git
+git clone https://github.com/dfki-ric/traversability_generator3d.git -b paper
 cd traversability_generator3d
 mkdir build && cd build
 cmake -DINSTALL_DEPS=ON -DRUN_TESTS=ON -DCMAKE_INSTALL_PREFIX=./install ..
