@@ -12,7 +12,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install dependencies
-      run: sudo apt-get update && sudo apt-get install -y graphviz doxygen
+      run: sudo apt-get update && sudo apt-get install -y graphviz doxygen libeigen3-dev libcgal-dev libpcl-dev libboost-filesystem-dev libboost-serialization-dev libboost-system-dev libopenscenegraph-dev
       shell: bash
 
     - name: build_doxygen
