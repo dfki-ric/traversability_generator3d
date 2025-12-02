@@ -53,9 +53,9 @@ void TraversabilityGenerator3dGui::setupUI()
     QVBoxLayout* layout = new QVBoxLayout();
     layout->addWidget(widget);
     
-    expandButton = new QPushButton("Expand");
-    expandButton->setEnabled(false);
-    layout->addWidget(expandButton);
+    resetButton = new QPushButton("Reset Traversability Map");
+    resetButton->setEnabled(false);
+    layout->addWidget(resetButton);
     window.setLayout(layout);
 
     qRegisterMetaType<maps::grid::TraversabilityMap3d<maps::grid::TraversabilityNodeBase*>>(
@@ -66,7 +66,7 @@ void TraversabilityGenerator3dGui::setupUI()
             this, SLOT(picked(float,float,float,int,int)));
     connect(&trav3dViz, SIGNAL(picked(float,float,float,int,int)), 
             this, SLOT(picked(float,float,float,int,int)));
-    connect(expandButton, &QPushButton::clicked, this, &TraversabilityGenerator3dGui::expandAll);
+    connect(resetButton, &QPushButton::clicked, this, &TraversabilityGenerator3dGui::resetTravMap);
 }
 
 void TraversabilityGenerator3dGui::setupTravGen(int argc, char** argv)
@@ -144,7 +144,7 @@ void TraversabilityGenerator3dGui::loadMls(const std::string& path)
             std::shared_ptr<maps::grid::MLSMapSloped> mlsPtr = std::make_shared<maps::grid::MLSMapSloped>(mlsMap);
             travGen->setMLSGrid(mlsPtr);            
 
-            expandButton->setEnabled(true);
+            resetButton->setEnabled(true);
         }
         return;
     }
@@ -158,7 +158,7 @@ void TraversabilityGenerator3dGui::loadMls(const std::string& path)
         std::shared_ptr<maps::grid::MLSMapSloped> mlsPtr = std::make_shared<maps::grid::MLSMapSloped>(mlsMap);
         travGen->setMLSGrid(mlsPtr);    
 
-        expandButton->setEnabled(true);
+        resetButton->setEnabled(true);
         return;
     }
     catch(...) {}
@@ -199,3 +199,37 @@ void TraversabilityGenerator3dGui::expandAll()
     travGen->expandAll(Eigen::Vector3d(start.position.x(), start.position.y(), start.position.z()));
     trav3dViz.updateData(travGen->getTraversabilityMap());
 }
+
+void TraversabilityGenerator3dGui::resetTravMap()
+{
+    LOG_INFO_S << "Resetting Traversability Map";
+
+    if(!travGen) {
+        LOG_WARN_S << "Traversability generator not initialized!";
+        return;
+    }
+
+    travGen.reset(new traversability_generator3d::TraversabilityGenerator3d(travConfig));
+
+    if(mlsMap.getNumCells().x() > 0) {
+        LOG_INFO_S << "Reassigning MLS map to new generator";
+        auto mlsPtr = std::make_shared<maps::grid::MLSMapSloped>(mlsMap);
+        travGen->setMLSGrid(mlsPtr);
+    }
+
+    // Clear visualization
+    trav3dViz.updateData(traversability_generator3d::TravMap3d());
+
+    // Reset start pose state
+    startPicked = false;
+    start.position.setZero();
+    start.orientation.setIdentity();
+    startViz.setTranslation(QVector3D(0,0,0));
+
+#ifdef ENABLE_DEBUG_DRAWINGS
+    V3DD::CLEAR_DRAWING("ugv_nav4d_start_aabb");
+#endif
+
+    LOG_INFO_S << "Traversability map reset complete.";
+}
+

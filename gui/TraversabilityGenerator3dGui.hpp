@@ -36,12 +36,13 @@ public:
 public slots:
     void picked(float x, float y,float z, int buttonMask, int modifierMask);
     void expandAll();
+    void resetTravMap();
     
 private:
     void loadMls(const std::string& path);
     
 private:
-    QPushButton* expandButton;
+    QPushButton* resetButton;
     vizkit3d::Vizkit3DWidget* widget;
     QDoubleSpinBox* time;
     QWidget window;
