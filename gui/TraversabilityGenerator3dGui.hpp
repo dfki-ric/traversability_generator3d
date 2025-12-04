@@ -40,6 +40,7 @@ public slots:
     
 private:
     void loadMls(const std::string& path);
+    void loadTravConfigFromYaml(const std::string& path);
     
 private:
     QPushButton* resetButton;

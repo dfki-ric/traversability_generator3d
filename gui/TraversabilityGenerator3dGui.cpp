@@ -13,6 +13,8 @@
 #include <pcl/common/transforms.h>
 #include <base-logging/Logging.hpp>
 
+#include <yaml-cpp/yaml.h>
+
 #ifdef ENABLE_DEBUG_DRAWINGS
 #include <vizkit3d_debug_drawings/DebugDrawing.hpp>
 #include <vizkit3d_debug_drawings/DebugDrawingColors.hpp>
@@ -69,37 +71,50 @@ void TraversabilityGenerator3dGui::setupUI()
     connect(resetButton, &QPushButton::clicked, this, &TraversabilityGenerator3dGui::resetTravMap);
 }
 
+void TraversabilityGenerator3dGui::loadTravConfigFromYaml(const std::string& file)
+{
+    YAML::Node cfg = YAML::LoadFile(file)["travConfig"];
+
+    LOG_INFO_S << "Loaded Parameters: ";
+    LOG_INFO_S << cfg;
+
+    // doubles
+    travConfig.maxStepHeight            = cfg["maxStepHeight"].as<double>();
+    travConfig.maxSlope                 = cfg["maxSlope"].as<double>();
+    travConfig.inclineLimittingMinSlope = cfg["inclineLimittingMinSlope"].as<double>();
+    travConfig.inclineLimittingLimit    = cfg["inclineLimittingLimit"].as<double>();
+    travConfig.costFunctionDist         = cfg["costFunctionDist"].as<double>();
+    travConfig.minTraversablePercentage = cfg["minTraversablePercentage"].as<double>();
+    travConfig.robotHeight              = cfg["robotHeight"].as<double>();
+    travConfig.robotSizeX               = cfg["robotSizeX"].as<double>();
+    travConfig.robotSizeY               = cfg["robotSizeY"].as<double>();
+    travConfig.distToGround             = cfg["distToGround"].as<double>();
+    travConfig.slopeMetricScale         = cfg["slopeMetricScale"].as<double>();
+    travConfig.gridResolution           = cfg["gridResolution"].as<double>();
+    travConfig.initialPatchVariance     = cfg["initialPatchVariance"] ? cfg["initialPatchVariance"].as<double>() : travConfig.initialPatchVariance;
+
+    // booleans
+    travConfig.allowForwardDownhill     = cfg["allowForwardDownhill"].as<bool>();
+    travConfig.enableInclineLimitting   = cfg["enableInclineLimitting"].as<bool>();
+
+    travConfig.useSoilInformation       = cfg["useSoilInformation"].as<bool>();
+    travConfig.traverseSand             = cfg["traverseSand"].as<bool>();
+    travConfig.traverseRocks            = cfg["traverseRocks"].as<bool>();
+    travConfig.traverseGravel           = cfg["traverseGravel"].as<bool>();
+    travConfig.traverseConcrete         = cfg["traverseConcrete"].as<bool>();
+
+    // enum
+    std::string s = cfg["slopeMetric"].as<std::string>();
+    if     (s == "AVG_SLOPE")      travConfig.slopeMetric = traversability_generator3d::AVG_SLOPE;
+    else if(s == "MAX_SLOPE")      travConfig.slopeMetric = traversability_generator3d::MAX_SLOPE;
+    else if(s == "TRIANGLE_SLOPE") travConfig.slopeMetric = traversability_generator3d::TRIANGLE_SLOPE;
+    else                            travConfig.slopeMetric = traversability_generator3d::NONE;
+}
+
 void TraversabilityGenerator3dGui::setupTravGen(int argc, char** argv)
 {
-    double res = 0.3;
-    if(argc > 2){
-        std::setlocale(LC_ALL, "C");
-        res = atof(argv[2]);
-    }
-
-    travConfig.gridResolution = res;
-    travConfig.maxSlope = 0.45;
-    travConfig.maxStepHeight = 0.25;
-    travConfig.robotSizeX = 0.5;
-    travConfig.robotSizeY = 0.5;
-    travConfig.robotHeight = 0.5;
-    travConfig.slopeMetricScale = 1.0;
-    travConfig.slopeMetric = traversability_generator3d::SlopeMetric::NONE;
-    travConfig.inclineLimittingMinSlope = 0.22;
-    travConfig.inclineLimittingLimit = 0.43;
-    travConfig.costFunctionDist = 0.0;
-    travConfig.distToGround = 0.0;
-    travConfig.minTraversablePercentage = 0.5;
-    travConfig.allowForwardDownhill = true;
-    travConfig.enableInclineLimitting = false;
-
-    if (travConfig.gridResolution >= std::min(travConfig.robotSizeX, travConfig.robotSizeY)) {
-        LOG_WARN_S << "Grid resolution (" << travConfig.gridResolution
-                  << " m) is greater than or equal to the robot footprint size ("
-                  << std::min(travConfig.robotSizeX, travConfig.robotSizeY)
-                  << " m). Results may be inaccurate. Please use a smaller resolution.";
-    }
-
+    std::string yaml_file = std::string(TRAV3D_CONFIG_DIR) + "/parameters.yaml";
+    loadTravConfigFromYaml(yaml_file);
     travGen.reset(new traversability_generator3d::TraversabilityGenerator3d(travConfig));
 
     if(argc > 1)
@@ -115,7 +130,7 @@ void TraversabilityGenerator3dGui::loadMls(const std::string& path)
 
     if(path.find(".ply") != std::string::npos)
     {
-        LOG_INFO_S << "Loading PLY";
+        LOG_INFO_S << "Loading PLY: " << path;
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
         pcl::PLYReader plyReader;
         if(plyReader.read(path, *cloud) >= 0)
@@ -146,23 +161,28 @@ void TraversabilityGenerator3dGui::loadMls(const std::string& path)
 
             resetButton->setEnabled(true);
         }
-        return;
+        else{
+            LOG_ERROR_S << "Unable to load mls from PLY: " << path;
+        }
     }
-    try
-    {
-        LOG_INFO_S << "Loading MLS";
-        boost::archive::binary_iarchive mlsIn(fileIn);
-        mlsIn >> mlsMap;
-        mlsViz.updateMLSSloped(mlsMap);
+    else{
+        try
+        {
+            LOG_INFO_S << "Loading MLS from Bin file: " << path;
+            boost::archive::binary_iarchive mlsIn(fileIn);
+            mlsIn >> mlsMap;
+            mlsViz.updateMLSSloped(mlsMap);
 
-        std::shared_ptr<maps::grid::MLSMapSloped> mlsPtr = std::make_shared<maps::grid::MLSMapSloped>(mlsMap);
-        travGen->setMLSGrid(mlsPtr);    
+            std::shared_ptr<maps::grid::MLSMapSloped> mlsPtr = std::make_shared<maps::grid::MLSMapSloped>(mlsMap);
+            travGen->setMLSGrid(mlsPtr);    
 
-        resetButton->setEnabled(true);
-        return;
+            resetButton->setEnabled(true);
+        }
+        catch(...) {
+            LOG_ERROR_S << "Unable to load mls. File is neither in PLY nor Bin format!";
+        }
     }
-    catch(...) {}
-    std::cerr << "Unable to load mls. Unknown format";
+    return;
 }
 
 void TraversabilityGenerator3dGui::picked(float x, float y, float z, int buttonMask, int modifierMask)

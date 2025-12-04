@@ -1,5 +1,10 @@
 rock_find_qt4(OPTIONAL)
 rock_find_qt5(OPTIONAL)
+find_package(yaml-cpp REQUIRED)
+
+add_definitions(
+    -DTRAV3D_CONFIG_DIR=\"${CMAKE_INSTALL_PREFIX}/share/${PROJECT_NAME}/config\"
+)
 
 include(RockQt)
 
@@ -24,6 +29,7 @@ rock_qt_library(
     MOC
         TraversabilityGenerator3dGui.hpp
     DEPS traversability_generator3d
+    LIBS yaml-cpp
     DEPS_QT4 Qt4::QtCore
     DEPS_QT5 Qt5::Core
     DEPS_PKGCONFIG
@@ -44,6 +50,7 @@ rock_qt_executable(
     SOURCES
         Main.cpp
     DEPS traversability_generator3d
+    LIBS yaml-cpp
     DEPS_QT traversability_generator3d_gui traversability_generator3d-viz
 )
 
@@ -66,3 +73,9 @@ if(TARGET traversability_generator3d_gui-qt5)
 else()
     message(STATUS "Gui using Qt5: disabled")
 endif(ROCK_QT_VERSION_5 AND vizkit3d-qt5_FOUND)
+
+install(
+    DIRECTORY config/
+    DESTINATION share/${PROJECT_NAME}/config
+    FILES_MATCHING PATTERN "*.yaml"
+)
