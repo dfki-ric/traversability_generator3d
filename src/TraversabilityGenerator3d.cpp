@@ -911,7 +911,7 @@ SoilNode* TraversabilityGenerator3d::generateStartSoilNode(const Eigen::Vector3d
 
     SoilNode* startNode = findMatchingSoilPatchAt(idx, startPos.z());
     if (startNode) {
-        LOG_INFO_S << "TraversabilityGenerator3d: Reusing existing SoilNode at index "
+        LOG_DEBUG_S << "TraversabilityGenerator3d: Reusing existing SoilNode at index "
                 << idx << " (height=" << startNode->getHeight() << ")";
         return startNode;
     }

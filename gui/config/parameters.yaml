@@ -31,8 +31,8 @@ travConfig:
   enableInclineLimitting: false
 
   # soil information
-  useSoilInformation: false
-  traverseSand: true
-  traverseRocks: true
+  useSoilInformation: true
+  traverseSand: false
+  traverseRocks: false
   traverseGravel: true
   traverseConcrete: true

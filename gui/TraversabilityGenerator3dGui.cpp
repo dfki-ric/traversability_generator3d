@@ -3,6 +3,7 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QComboBox>
+#include <QDoubleSpinBox>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <vizkit3d/Vizkit3DWidget.hpp>
@@ -12,7 +13,8 @@
 #include <pcl/common/common.h>
 #include <pcl/common/transforms.h>
 #include <base-logging/Logging.hpp>
-
+#include <fstream>
+#include <traversability_generator3d/SoilNode.hpp>
 #include <yaml-cpp/yaml.h>
 
 #ifdef ENABLE_DEBUG_DRAWINGS
@@ -36,11 +38,13 @@ void TraversabilityGenerator3dGui::setupUI()
     V3DD::CONFIGURE_DEBUG_DRAWINGS_USE_EXISTING_WIDGET(widget);
 #endif
     trav3dViz.setPluginName("TraversabilityMap3d");
+    soil3dViz.setPluginName("SoilMap3d");
     startViz.setPluginName("Start Pose");
 
     widget->setCameraManipulator(vizkit3d::ORBIT_MANIPULATOR);
     widget->addPlugin(&mlsViz);
     widget->addPlugin(&trav3dViz);
+    widget->addPlugin(&soil3dViz);
     widget->addPlugin(&startViz);
     widget->addPlugin(&gridViz);
     
@@ -55,7 +59,45 @@ void TraversabilityGenerator3dGui::setupUI()
     QVBoxLayout* layout = new QVBoxLayout();
     layout->addWidget(widget);
     
-    resetButton = new QPushButton("Reset Traversability Map");
+    QHBoxLayout* soilLayout = new QHBoxLayout();
+
+    soilTypeCombo = new QComboBox();
+    soilTypeCombo->addItem("No selection");   // index 0
+    soilTypeCombo->addItem("CONCRETE");
+    soilTypeCombo->addItem("ROCKS");
+    soilTypeCombo->addItem("SAND");
+    soilTypeCombo->addItem("GRAVEL");
+
+    sigmaXSpin = new QDoubleSpinBox();
+    sigmaXSpin->setRange(0.01, 100.0);
+    sigmaXSpin->setValue(1.0);
+    sigmaXSpin->setSingleStep(0.1);
+    sigmaXSpin->setPrefix("σx=");
+
+    sigmaYSpin = new QDoubleSpinBox();
+    sigmaYSpin->setRange(0.01, 100.0);
+    sigmaYSpin->setValue(1.0);
+    sigmaYSpin->setSingleStep(0.1);
+    sigmaYSpin->setPrefix("σy=");
+
+    uncertaintySpin = new QDoubleSpinBox();
+    uncertaintySpin->setRange(0.0, 1.0);
+    uncertaintySpin->setValue(0.0);
+    uncertaintySpin->setSingleStep(0.05);
+    uncertaintySpin->setPrefix("u=");
+
+    soilHintLabel = new QLabel("Click map to add soil sample");
+
+    soilLayout->addWidget(new QLabel("Soil:"));
+    soilLayout->addWidget(soilTypeCombo);
+    soilLayout->addWidget(sigmaXSpin);
+    soilLayout->addWidget(sigmaYSpin);
+    soilLayout->addWidget(uncertaintySpin);
+
+    layout->addLayout(soilLayout);
+    layout->addWidget(soilHintLabel);
+
+    resetButton = new QPushButton("Reset Traversability and Soil Maps");
     resetButton->setEnabled(false);
     layout->addWidget(resetButton);
     window.setLayout(layout);
@@ -109,6 +151,39 @@ void TraversabilityGenerator3dGui::loadTravConfigFromYaml(const std::string& fil
     else if(s == "MAX_SLOPE")      travConfig.slopeMetric = traversability_generator3d::MAX_SLOPE;
     else if(s == "TRIANGLE_SLOPE") travConfig.slopeMetric = traversability_generator3d::TRIANGLE_SLOPE;
     else                            travConfig.slopeMetric = traversability_generator3d::NONE;
+}
+
+static traversability_generator3d::SoilType soilTypeFromString(const std::string& s)
+{
+    if (s == "CONCRETE") return SoilType::CONCRETE;
+    if (s == "ROCKS")    return SoilType::ROCKS;
+    if (s == "SAND")     return SoilType::SAND;
+    if (s == "GRAVEL")   return SoilType::GRAVEL;
+
+    return SoilType::UNKNOWN_SOIL;
+}
+
+static bool soilTypeFromCombo(QComboBox* box, SoilType& outType)
+{
+    if (!box || box->currentIndex() == 0)
+        return false; // No selection
+
+    const std::string s = box->currentText().toStdString();
+    outType = soilTypeFromString(s);
+    return outType != SoilType::UNKNOWN_SOIL;
+}
+
+void TraversabilityGenerator3dGui::applySoilInformationToGenerator()
+{
+    if (!travGen)
+        return;
+
+    if (travConfig.useSoilInformation){
+        for (const auto& s : soilSamplesList)
+            travGen->addSoilNode(s);
+        travGen->updateSoilInformation();
+    }
+    soilSamplesList.clear();
 }
 
 void TraversabilityGenerator3dGui::setupTravGen(int argc, char** argv)
@@ -185,25 +260,61 @@ void TraversabilityGenerator3dGui::loadMls(const std::string& path)
     return;
 }
 
-void TraversabilityGenerator3dGui::picked(float x, float y, float z, int buttonMask, int modifierMask)
-{   
-    if(buttonMask == 1) // left click
+void TraversabilityGenerator3dGui::picked(float x, float y, float z,
+                                          int buttonMask, int /*modifierMask*/)
+{
+    if (buttonMask != 1) // left click only
+        return;
+
+    SoilType selectedType;
+    if (soilTypeFromCombo(soilTypeCombo, selectedType))
     {
-        start.position << x, y, z;
-        start.position.z() += travConfig.distToGround;
+        SoilSample s;
+        s.location = base::Vector3d(x, y, z);
+        s.type = selectedType;
+        s.sigmaX = sigmaXSpin->value();
+        s.sigmaY = sigmaYSpin->value();
+        s.uncertainty = uncertaintySpin->value();
+
+        if (!s.isValid())
+        {
+            LOG_WARN_S << "Invalid soil sample — not added";
+            return;
+        }
+
+        soilSamplesList.push_back(s);
+
+        LOG_INFO_S << "Added soil sample: "
+                   << "type=" << soilTypeCombo->currentText().toStdString()
+                   << " loc=" << s.location.transpose()
+                   << " σ=(" << s.sigmaX << "," << s.sigmaY << ")"
+                   << " u=" << s.uncertainty;
+    }
+
+    start.position << x, y, z;
+    start.position.z() += travConfig.distToGround;
 
 #ifdef ENABLE_DEBUG_DRAWINGS
-        V3DD::CLEAR_DRAWING("ugv_nav4d_start_aabb");
-        V3DD::DRAW_WIREFRAME_BOX("ugv_nav4d_start_aabb", start.position + base::Vector3d(0, 0, travConfig.distToGround / 2.0), start.orientation,
-                           base::Vector3d(travConfig.robotSizeX, travConfig.robotSizeY, travConfig.robotHeight - travConfig.distToGround), V3DD::Color::cyan);
+    V3DD::CLEAR_DRAWING("ugv_nav4d_start_aabb");
+    V3DD::DRAW_WIREFRAME_BOX(
+        "ugv_nav4d_start_aabb",
+        start.position + base::Vector3d(0, 0, travConfig.distToGround / 2.0),
+        start.orientation,
+        base::Vector3d(travConfig.robotSizeX,
+                       travConfig.robotSizeY,
+                       travConfig.robotHeight - travConfig.distToGround),
+        V3DD::Color::cyan);
 #endif
-        QVector3D pos(start.position.x(), start.position.y(), start.position.z());
-        startViz.setTranslation(pos);
-        LOG_INFO_S << "Start: " << start.position.transpose();
-        startPicked = true;
-        expandAll();
-    }
+
+    startViz.setTranslation(QVector3D(
+        start.position.x(),
+        start.position.y(),
+        start.position.z()));
+
+    startPicked = true;
+    expandAll();
 }
+
 
 void TraversabilityGenerator3dGui::show()
 {
@@ -217,12 +328,19 @@ void TraversabilityGenerator3dGui::expandAll()
         return;
     }
     travGen->expandAll(Eigen::Vector3d(start.position.x(), start.position.y(), start.position.z()));
+    
+    applySoilInformationToGenerator();
+    
     trav3dViz.updateData(travGen->getTraversabilityMap());
+    soil3dViz.updateData(travGen->getSoilMap());
+
+    //Clear previous travmap to incorporate updated soil information in the next travmap expansion
+    travGen->clearTrMap();
 }
 
 void TraversabilityGenerator3dGui::resetTravMap()
 {
-    LOG_INFO_S << "Resetting Traversability Map";
+    LOG_INFO_S << "Resetting Maps";
 
     if(!travGen) {
         LOG_WARN_S << "Traversability generator not initialized!";
@@ -239,6 +357,9 @@ void TraversabilityGenerator3dGui::resetTravMap()
 
     // Clear visualization
     trav3dViz.updateData(traversability_generator3d::TravMap3d());
+    soil3dViz.updateData(traversability_generator3d::SoilMap3d());
+
+    soilSamplesList.clear();
 
     // Reset start pose state
     startPicked = false;
