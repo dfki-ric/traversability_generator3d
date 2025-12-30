@@ -64,6 +64,59 @@ This rich classification scheme provides more than just a binary safe/unsafe map
 
 Together, these node types form the backbone of the `TraversabilityMap3d`, making it both a **planning tool** and a **research framework** for robust traversability estimation.
 
+## Soil-Aware Traversability
+
+Traversability estimation can optionally incorporate **semantic soil information** that influences traversal costs and feasibility.
+
+Supported soil types:
+- **Concrete**
+- **Rocks**
+- **Sand**
+- **Gravel**
+- **Unknown / Unlabeled**
+
+Each soil sample is modeled as a **Gaussian distribution** over the map with configurable parameters:
+- `sigmaX`, `sigmaY` – spatial influence (spread)
+- `uncertainty ∈ [0,1]` – confidence of the soil label
+
+This allows **soft, probabilistic integration** of sparse soil observations into the traversability map.
+
+---
+
+## Interactive GUI
+
+### GUI Controls
+
+Below the visualization window, the GUI provides:
+
+- **Soil type dropdown**
+  - `No selection` (default)
+  - `CONCRETE`
+  - `ROCKS`
+  - `SAND`
+  - `GRAVEL`
+- **σx, σy spin boxes**
+  - Control the Gaussian spread of the soil sample
+- **Uncertainty spin box**
+  - Confidence of the soil label in the range `[0, 1]`
+
+### Interaction Logic
+
+- **Left-click on MLS Map with “No selection”**
+  - Sets the **start pose**
+  - Triggers traversability expansion
+
+- **Left-click on MLS Map with a soil type selected**
+  - Sets the **start pose**
+  - Adds a **SoilSample** at the clicked location
+  - Triggers traversability expansion
+  - Soil influence is applied on the traversability expansion
+    
+- **Left-Click on button Reset Traversability and Soil Maps**
+  - Resets the data structures for traversability and soil map.
+
+This interaction model ensures a **clear separation** between navigation setup and environment annotation.
+
 ## Run Example with Test Data  
 
 You can quickly verify the setup by downloading and running the provided test datasets.  
