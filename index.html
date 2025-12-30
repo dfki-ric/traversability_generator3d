@@ -118,21 +118,81 @@ Why node types matter</h2>
 </ul>
 <p>Together, these node types form the backbone of the <code>TraversabilityMap3d</code>, making it both a <b>planning tool</b> and a <b>research framework</b> for robust traversability estimation.</p>
 <h1><a class="anchor" id="autotoc_md6"></a>
+Soil-Aware Traversability</h1>
+<p>Traversability estimation can optionally incorporate <b>semantic soil information</b> that influences traversal costs and feasibility.</p>
+<p>Supported soil types:</p><ul>
+<li><b>Concrete</b></li>
+<li><b>Rocks</b></li>
+<li><b>Sand</b></li>
+<li><b>Gravel</b></li>
+<li><b>Unknown / Unlabeled</b></li>
+</ul>
+<p>Each soil sample is modeled as a <b>Gaussian distribution</b> over the map with configurable parameters:</p><ul>
+<li><code>sigmaX</code>, <code>sigmaY</code> – spatial influence (spread)</li>
+<li><code>uncertainty ∈ [0,1]</code> – confidence of the soil label</li>
+</ul>
+<p>This allows <b>soft, probabilistic integration</b> of sparse soil observations into the traversability map.</p>
+<hr  />
+<h1><a class="anchor" id="autotoc_md8"></a>
+Interactive GUI</h1>
+<h2><a class="anchor" id="autotoc_md9"></a>
+GUI Controls</h2>
+<p>Below the visualization window, the GUI provides:</p>
+<ul>
+<li><b>Soil type dropdown</b><ul>
+<li><code>No selection</code> (default)</li>
+<li><code>CONCRETE</code></li>
+<li><code>ROCKS</code></li>
+<li><code>SAND</code></li>
+<li><code>GRAVEL</code></li>
+</ul>
+</li>
+<li><b>σx, σy spin boxes</b><ul>
+<li>Control the Gaussian spread of the soil sample</li>
+</ul>
+</li>
+<li><b>Uncertainty spin box</b><ul>
+<li>Confidence of the soil label in the range <code>[0, 1]</code></li>
+</ul>
+</li>
+</ul>
+<h2><a class="anchor" id="autotoc_md10"></a>
+Interaction Logic</h2>
+<ul>
+<li><b>Left-click on MLS Map with “No selection”</b><ul>
+<li>Sets the <b>start pose</b></li>
+<li>Triggers traversability expansion</li>
+</ul>
+</li>
+<li><b>Left-click on MLS Map with a soil type selected</b><ul>
+<li>Sets the <b>start pose</b></li>
+<li>Adds a <b>SoilSample</b> at the clicked location</li>
+<li>Triggers traversability expansion</li>
+<li>Soil influence is applied on the traversability expansion</li>
+</ul>
+</li>
+<li><b>Left-Click on button Reset Traversability and Soil Maps</b><ul>
+<li>Resets the data structures for traversability and soil map.</li>
+</ul>
+</li>
+</ul>
+<p>This interaction model ensures a <b>clear separation</b> between navigation setup and environment annotation.</p>
+<h1><a class="anchor" id="autotoc_md11"></a>
 Run Example with Test Data</h1>
 <p>You can quickly verify the setup by downloading and running the provided test datasets. <br  />
 </p>
-<h2><a class="anchor" id="autotoc_md7"></a>
+<h2><a class="anchor" id="autotoc_md12"></a>
 1. Download the sample point clouds</h2>
 <div class="fragment"><div class="line">wget https://zenodo.org/records/13771864/files/utah.ply</div>
 <div class="line">wget https://zenodo.org/records/13771864/files/test_area.ply</div>
-</div><!-- fragment --><h2><a class="anchor" id="autotoc_md8"></a>
+</div><!-- fragment --><h2><a class="anchor" id="autotoc_md13"></a>
 2. Run the traversability generator</h2>
 <div class="fragment"><div class="line">./build/gui/traversability_generator3d_bin-qt5 utah.ply 0.3</div>
 <div class="line">./build/gui/traversability_generator3d_bin-qt5 test_area.ply 0.2</div>
 </div><!-- fragment --> <blockquote class="doxtable">
 <p>&zwj;💡 <b>Tip:</b> The following enviroment variables can be used to control the behaviour of the logger: <b>BASE_LOG_LEVEL</b> Set to one of DEBUG, INFO, WARN, ERROR or FATAL to define the maximum logging level. </p>
 </blockquote>
-<h2><a class="anchor" id="autotoc_md9"></a>
+<h2><a class="anchor" id="autotoc_md14"></a>
 3. Inspect the results in the GUI</h2>
 <ul>
 <li>After the GUI loads, <b>left-click on the MLS map</b>. <br  />
@@ -143,14 +203,14 @@ Run Example with Test Data</h1>
 <blockquote class="doxtable">
 <p>&zwj;💡 <b>Tip:</b> The second argument (<code>0.3</code> or <code>0.2</code>) specifies the resolution in meters, which controls the grid size for the MLS and traversability map. </p>
 </blockquote>
-<h2><a class="anchor" id="autotoc_md10"></a>
+<h2><a class="anchor" id="autotoc_md15"></a>
 4. Code Example</h2>
 <div class="fragment"><div class="line">./build/test/test_travgen utah.ply</div>
-</div><!-- fragment --><h1><a class="anchor" id="autotoc_md11"></a>
+</div><!-- fragment --><h1><a class="anchor" id="autotoc_md16"></a>
 Acknowledgements</h1>
 <p>This library was developed at the <a href="https://robotik.dfki-bremen.de/en/startpage.html">DFKI Robotics Innovation Center</a> and funded by the <b>German Federal Ministry of Education and Research (BMBF)</b>. <br  />
 </p>
-<h1><a class="anchor" id="autotoc_md12"></a>
+<h1><a class="anchor" id="autotoc_md17"></a>
 License</h1>
 <p>This project is released under the [BSD-3-Clause License](LICENSE). </p>
 </div></div><!-- PageDoc -->
