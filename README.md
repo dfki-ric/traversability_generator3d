@@ -140,9 +140,33 @@ wget https://zenodo.org/records/13771864/files/test_area.ply
 
 > 💡 **Tip:** The second argument (`0.3` or `0.2`) specifies the resolution in meters, which controls the grid size for the MLS and traversability map.
 
-### 4. Code Example
+### 4. Code Walkthrough
+A minimal executable is provided to demonstrate the full traversability generation pipeline
+on a real 3D point cloud. The walkthrough loads a point cloud, builds the MLS map, and computes
+the traversability and frontier regions.
+
+> 💡 **Tip:** The start position is assumed to be at `(0, 0, -distToGround)`.  
+> If your point cloud is offset or uses a different coordinate frame, update the start
+> position accordingly to ensure expansion begins on the ground surface.
+
+Run the walkthrough using:
 ```bash
-./build/test/test_travgen utah.ply
+./build/test/travgen3d_walkthrough utah.ply
+```
+
+### 5. Tests
+
+The traversability generator is validated using unit tests.
+The tests cover core functionality such as:
+
+- Traversability map generation from MLS input
+- Step-height handling and obstacle detection
+- Frontier detection and frontier inflation
+  
+To build and run the test suite:
+
+```bash
+./build/test/test_TraversabilityGenerator3d
 ```
 
 ## Acknowledgements
