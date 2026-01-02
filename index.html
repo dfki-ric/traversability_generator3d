@@ -204,13 +204,28 @@ Run Example with Test Data</h1>
 <p>&zwj;💡 <b>Tip:</b> The second argument (<code>0.3</code> or <code>0.2</code>) specifies the resolution in meters, which controls the grid size for the MLS and traversability map. </p>
 </blockquote>
 <h2><a class="anchor" id="autotoc_md15"></a>
-4. Code Example</h2>
-<div class="fragment"><div class="line">./build/test/test_travgen utah.ply</div>
-</div><!-- fragment --><h1><a class="anchor" id="autotoc_md16"></a>
+4. Code Walkthrough</h2>
+<p>A minimal executable is provided to demonstrate the full traversability generation pipeline on a real 3D point cloud. The walkthrough loads a point cloud, builds the MLS map, and computes the traversability and frontier regions.</p>
+<blockquote class="doxtable">
+<p>&zwj;💡 <b>Tip:</b> The start position is assumed to be at <code>(0, 0, -distToGround)</code>. <br  />
+ If your point cloud is offset or uses a different coordinate frame, update the start position accordingly to ensure expansion begins on the ground surface. </p>
+</blockquote>
+<p>Run the walkthrough using: </p><div class="fragment"><div class="line">./build/test/travgen3d_walkthrough utah.ply</div>
+</div><!-- fragment --><h2><a class="anchor" id="autotoc_md16"></a>
+5. Tests</h2>
+<p>The traversability generator is validated using unit tests. The tests cover core functionality such as:</p>
+<ul>
+<li>Traversability map generation from MLS input</li>
+<li>Step-height handling and obstacle detection</li>
+<li>Frontier detection and frontier inflation</li>
+</ul>
+<p>To build and run the test suite:</p>
+<div class="fragment"><div class="line">./build/test/test_TraversabilityGenerator3d</div>
+</div><!-- fragment --><h1><a class="anchor" id="autotoc_md17"></a>
 Acknowledgements</h1>
 <p>This library was developed at the <a href="https://robotik.dfki-bremen.de/en/startpage.html">DFKI Robotics Innovation Center</a> and funded by the <b>German Federal Ministry of Education and Research (BMBF)</b>. <br  />
 </p>
-<h1><a class="anchor" id="autotoc_md17"></a>
+<h1><a class="anchor" id="autotoc_md18"></a>
 License</h1>
 <p>This project is released under the [BSD-3-Clause License](LICENSE). </p>
 </div></div><!-- PageDoc -->
