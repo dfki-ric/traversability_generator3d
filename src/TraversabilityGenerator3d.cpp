@@ -1239,7 +1239,7 @@ void TraversabilityGenerator3d::addConnectedPatches(SoilNode *  node)
 
         if(!toAdd)
         {
-            //toAdd = createSoilPatchAt(idx, curHeight);
+            toAdd = createSoilPatchAt(idx, curHeight);
         }
 
         if(toAdd)
@@ -1274,7 +1274,15 @@ void TraversabilityGenerator3d::updateSoilInformation(){
         for(TravGenNode *node : l)
         {
             Eigen::Vector3d nodePos = node->getPosition(trMap);
-            SoilNode *soilNode = generateStartSoilNode(nodePos);
+            Index idx;
+            if (!soilMap.toGrid(nodePos, idx)) {
+                LOG_ERROR_S << "TraversabilityGenerator3d: updateSoilInformation:  Node position "
+                            << nodePos.transpose()
+                            << " is outside of soil map.";
+                continue;
+            }
+
+            SoilNode* soilNode = findMatchingSoilPatchAt(idx, nodePos.z());
             if (!soilNode){
                 continue;
             }
