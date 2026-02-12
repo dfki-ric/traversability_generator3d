@@ -1,5 +1,7 @@
 # traversability_generator3d
 
+CI build (paper): ![paper](https://github.com/dfki-ric/traversability_generator3d/actions/workflows/c-cpp.yml/badge.svg)
+
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
 
 A C++ library for **3D traversability estimation from Multi-Level Surface (MLS) maps**, developed at the [DFKI Robotics Innovation Center](https://robotik.dfki-bremen.de/en/startpage.html).
