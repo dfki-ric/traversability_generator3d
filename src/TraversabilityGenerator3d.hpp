@@ -123,6 +123,8 @@ public:
     void setSoilType(SoilNode * node, SoilType soilType);
     bool addSoilNode(const SoilSample& sample);
 
+    double gaussian2D(double x, double y, double meanX, double meanY, double sigmaX, double sigmaY);
+
     virtual TravGenNode *generateStartNode(const Eigen::Vector3d &startPos);
     TravGenNode *findMatchingTraversabilityPatchAt(maps::grid::Index idx, const double curHeight) const;
     SoilNode* findMatchingSoilPatchAt(maps::grid::Index idx, const double curHeight) const;

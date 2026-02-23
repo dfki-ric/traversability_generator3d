@@ -2,8 +2,20 @@
 # executed from 'project/build' with 'cmake ../'.
 cmake_minimum_required(VERSION 3.9)
 project(traversability_generator3d
-        VERSION 0.1
-        DESCRIPTION "GF")
+        VERSION 1.0
+        DESCRIPTION "C++ library for generating 3D traversability maps from MLS terrain data"
+)
+
+if(INSTALL_DEPS)
+
+  execute_process(COMMAND bash install_os_dependencies.bash
+                  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/source_dependencies)
+  execute_process(COMMAND bash build.bash ${CMAKE_INSTALL_PREFIX}
+                  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/source_dependencies)
+  set(ENV{PKG_CONFIG_PATH} ${CMAKE_INSTALL_PREFIX}/lib/pkgconfig/)
+  set(ENV{CMAKE_PREFIX_PATH} ${CMAKE_INSTALL_PREFIX}/share/rock/cmake/)
+endif()
+
 find_package(Rock)
 
 set(CMAKE_CXX_STANDARD 14)
@@ -19,3 +31,9 @@ endif()
 rock_init()
 rock_feature(NOCURDIR)
 rock_standard_layout()
+
+if(RUN_TESTS)
+add_subdirectory(test)
+endif()
+
+add_subdirectory(gui)

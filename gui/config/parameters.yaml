@@ -1,0 +1,38 @@
+#Parameters loaded on starting the debug GUI
+
+travConfig:
+
+  # grid
+  gridResolution: 0.3
+  initialPatchVariance: 0.0001
+
+  # robot dimensions
+  robotHeight: 0.7
+  robotSizeX: 0.9
+  robotSizeY: 0.6
+  distToGround: 0.0
+
+  # slope / terrain constraints
+  maxSlope: 0.45                # [rad]
+  maxStepHeight: 0.25
+  inclineLimittingMinSlope: 0.2
+  inclineLimittingLimit: 0.1
+
+  # slope metric
+  slopeMetric: "NONE"          # options: NONE, AVG_SLOPE, MAX_SLOPE, TRIANGLE_SLOPE
+  slopeMetricScale: 1.0
+
+  # traversability estimation
+  costFunctionDist: 0.0
+  minTraversablePercentage: 0.4
+
+  # movement logic
+  allowForwardDownhill: true
+  enableInclineLimitting: false
+
+  # soil information
+  useSoilInformation: true
+  traverseSand: false
+  traverseRocks: false
+  traverseGravel: true
+  traverseConcrete: true
