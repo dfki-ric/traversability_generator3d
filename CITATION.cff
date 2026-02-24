@@ -1,0 +1,42 @@
+cff-version: "1.2.0"
+authors:
+- family-names: Lodhi
+  given-names: Muhammad Haider Khan
+  orcid: "https://orcid.org/0009-0008-1199-3489"
+- family-names: Hertzberg
+  given-names: Christoph
+  orcid: "https://orcid.org/0009-0005-6467-0286"
+- family-names: Böckmann
+  given-names: Arne
+- family-names: Machowinski
+  given-names: Janosch
+doi: 10.5281/zenodo.18611473
+message: If you use this software, please cite our article in the
+  Journal of Open Source Software.
+preferred-citation:
+  authors:
+  - family-names: Lodhi
+    given-names: Muhammad Haider Khan
+    orcid: "https://orcid.org/0009-0008-1199-3489"
+  - family-names: Hertzberg
+    given-names: Christoph
+    orcid: "https://orcid.org/0009-0005-6467-0286"
+  - family-names: Böckmann
+    given-names: Arne
+  - family-names: Machowinski
+    given-names: Janosch
+  date-published: 2026-02-24
+  doi: 10.21105/joss.09410
+  issn: 2475-9066
+  issue: 118
+  journal: Journal of Open Source Software
+  publisher:
+    name: Open Journals
+  start: 9410
+  title: "traversability_generator3d: A C++ library for 3D
+    traversability estimation from MLS maps"
+  type: article
+  url: "https://joss.theoj.org/papers/10.21105/joss.09410"
+  volume: 11
+title: "traversability_generator3d: A C++ library for 3D traversability
+  estimation from MLS maps"
