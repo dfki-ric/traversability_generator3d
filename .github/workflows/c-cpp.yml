@@ -16,3 +16,4 @@ jobs:
         mkdir build && cd build
         cmake -DINSTALL_DEPS=ON -DRUN_TESTS=ON -DCMAKE_INSTALL_PREFIX=./install ..
         make -j install
+        ./test/test_TraversabilityGenerator3d
