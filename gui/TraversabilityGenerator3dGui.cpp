@@ -110,7 +110,7 @@ void TraversabilityGenerator3dGui::setupUI()
             this, SLOT(picked(float,float,float,int,int)));
     connect(&trav3dViz, SIGNAL(picked(float,float,float,int,int)), 
             this, SLOT(picked(float,float,float,int,int)));
-    connect(resetButton, &QPushButton::clicked, this, &TraversabilityGenerator3dGui::resetTravMap);
+    connect(resetButton, SIGNAL(clicked(bool)), this, SLOT(resetTravMap()));
 }
 
 void TraversabilityGenerator3dGui::loadTravConfigFromYaml(const std::string& file)
