@@ -13,7 +13,7 @@ IF("${PCL_VERSION_MAJOR}.${PCL_VERSION_MINOR}" VERSION_LESS 1.14)
     SET(PCL_VERSION_SUFFIX "-${PCL_VERSION_MAJOR}.${PCL_VERSION_MINOR}")
 ENDIF()
 
-if(ENABLE_DEBUG_DRAWINGS AND vizkit3d_debug_drawings-commands_FOUND)
+if(ENABLE_DEBUG_DRAWINGS)
 	# These are (only) required for building the GUIs:
 	list(APPEND DEPS_PKGCONFIG_QT vizkit3d_debug_drawings)
 endif()
