@@ -189,8 +189,8 @@ Run Example with Test Data</h1>
 <div class="line">wget https://zenodo.org/records/13771864/files/test_area.ply</div>
 </div><!-- fragment --><h2><a class="anchor" id="autotoc_md13"></a>
 2. Run the traversability generator</h2>
-<div class="fragment"><div class="line">./build/gui/traversability_generator3d_bin-qt5 utah.ply 0.3</div>
-<div class="line">./build/gui/traversability_generator3d_bin-qt5 test_area.ply 0.2</div>
+<div class="fragment"><div class="line">./build/gui/traversability_generator3d_bin-qt5 utah.ply</div>
+<div class="line">./build/gui/traversability_generator3d_bin-qt5 test_area.ply</div>
 </div><!-- fragment --> <blockquote class="doxtable">
 <p>&zwj;💡 <b>Tip:</b> The following enviroment variables can be used to control the behaviour of the logger: <b>BASE_LOG_LEVEL</b> Set to one of DEBUG, INFO, WARN, ERROR or FATAL to define the maximum logging level. </p>
 </blockquote>
@@ -202,9 +202,6 @@ Run Example with Test Data</h1>
 <li>The corresponding <b>TraversabilityMap3d</b> will expand and display navigable vs. non-navigable regions. <br  />
 </li>
 </ul>
-<blockquote class="doxtable">
-<p>&zwj;💡 <b>Tip:</b> The second argument (<code>0.3</code> or <code>0.2</code>) specifies the resolution in meters, which controls the grid size for the MLS and traversability map. </p>
-</blockquote>
 <h2><a class="anchor" id="autotoc_md15"></a>
 4. Code Walkthrough</h2>
 <p>A minimal executable is provided to demonstrate the full traversability generation pipeline on a real 3D point cloud. The walkthrough loads a point cloud, builds the MLS map, and computes the traversability and frontier regions.</p>
