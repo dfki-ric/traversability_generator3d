@@ -16,7 +16,7 @@ enum SlopeMetric
 class TraversabilityConfig
 {
 public:
-    
+
     TraversabilityConfig()
         : maxStepHeight(0.05)
         , maxSlope(0.5)
@@ -32,22 +32,23 @@ public:
         , slopeMetric(NONE)
         , gridResolution(0.3)
         , initialPatchVariance(0.01 * 0.01)
+        , obstacleInflationMultiplier(0.5)
         , allowForwardDownhill(true)
-        , enableInclineLimitting(false)     
+        , enableInclineLimitting(false)
         , useSoilInformation(false)
-        , traverseSand(true)     
+        , traverseSand(true)
         , traverseRocks(true)
-        , traverseGravel(true)     
-        , traverseConcrete(true)  
+        , traverseGravel(true)
+        , traverseConcrete(true)
     {};
-    
+
     /** The maximum step height that the robot can traverse.
      *  This is used during map expansion. Steps heigher than this become map boundaries */
     double maxStepHeight;
-    
+
     /**[rad] maximum traversable slope. Above this slope no travmap entries will be generated*/
-    double maxSlope; 
-    
+    double maxSlope;
+
     /** ---- incline limitting -----
      * The orientation at which the path crosses the incline of the terrain is limited. The steeper the terrain, the less is the path allowed to deviate from the steepest direction. I.e. the steeper it gets, the more
      * straight the path becomes.
@@ -56,10 +57,10 @@ public:
     /** [rad] At maxSlope the robot's movement direction may only deviate by +-inclineLimittingLimit
      * from the direction of the steepest slope */
     double inclineLimittingLimit;
-    
+
     /**Objects within a corridor of width costFunctionDist around a trajectory will influence the cost function. */
     double costFunctionDist;
-    
+
     /**
      * This value controls, how unknown patches are detected.
      * If only a certain percentage of MSL patches are present,
@@ -67,34 +68,39 @@ public:
      * an unknown patch.
      * */
     double minTraversablePercentage;
-    
+
     //dimensions of the robot bounding box.
     double robotHeight;
     double robotSizeX;
     double robotSizeY;
-    
+
     /* Distance from body frame to ground
      * start and goal position are expected in body frame
      */
     double distToGround;
-    
-    /** Defines how strong the slope is factored into the 
+
+    /** Defines how strong the slope is factored into the
      *  motion cost.*/
     double slopeMetricScale;
-    
+
     /** which metric to use to factor in the slope of a motion */
     SlopeMetric slopeMetric;
-    
+
     double gridResolution;
-    
+
     /** The variance that "initial patches" should have.
      *  @see Planner::setInitialPatch() */
-    double initialPatchVariance; 
-    
+    double initialPatchVariance;
+
+    /** Multiplier (0.0-1.0) for obstacle inflation radius calculation.
+     *  Affects how much the obstacles are inflated around the robot footprint.
+     *  Default is 0.5 (half the robot diagonal). Higher values = more conservative inflation. */
+    double obstacleInflationMultiplier;
+
     /**if true the robot is allowed to drive downhill forward, otherwise
      * it has to drive downhill backwards */
     bool allowForwardDownhill;
-    
+
     /** if true, incline limitting is enabled and the robot motion is restricted when moving on steep hills. */
     bool enableInclineLimitting;
 
