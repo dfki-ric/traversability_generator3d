@@ -736,7 +736,7 @@ void TraversabilityGenerator3d::inflateObstacles()
 {
     const double halfRobotSizeX = config.robotSizeX / 2;
     const double halfRobotSizeY = config.robotSizeY / 2;
-	const double inflRadius = std::sqrt((halfRobotSizeX * halfRobotSizeX) + (halfRobotSizeY * halfRobotSizeY)) + 1e-5;
+    const double inflRadius = config.obstacleInflationMultiplier * std::sqrt((halfRobotSizeX * halfRobotSizeX) + (halfRobotSizeY * halfRobotSizeY)) + 1e-5;
 
     for (TravGenNode *n : obstacleNodesGrowList)
     {
@@ -745,8 +745,8 @@ void TraversabilityGenerator3d::inflateObstacles()
             TravGenNode* node = static_cast<TravGenNode*>(neighbor);
             if ((n->getPosition(trMap) - neighbor->getPosition(trMap)).norm() < inflRadius)
             {
-                if(node->getUserData().nodeType == NodeType::TRAVERSABLE || 
-                   node->getUserData().nodeType == NodeType::INFLATED_FRONTIER || 
+                if(node->getUserData().nodeType == NodeType::TRAVERSABLE ||
+                   node->getUserData().nodeType == NodeType::INFLATED_FRONTIER ||
                    node->getUserData().nodeType == NodeType::FRONTIER ||
                    node->getUserData().nodeType == NodeType::UNKNOWN)
                 {
@@ -961,14 +961,6 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
             return false;
         }
     } 
-    
-    if(!isNodeFreeOfObstacles(node))
-    {
-        node->setType(TraversabilityNodeBase::OBSTACLE);
-        node->getUserData().nodeType = NodeType::OBSTACLE;
-        obstacleNodesGrowList.push_back(node);
-        return false;
-    }
     
     if(config.enableInclineLimitting)
     {
