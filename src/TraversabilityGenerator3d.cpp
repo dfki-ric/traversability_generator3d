@@ -416,8 +416,9 @@ bool TraversabilityGenerator3d::checkStepHeightAABB(TravGenNode *node)
     }
     nodePos.z() += node->getHeight();
 
-    const double smallerRobotSize = std::min(config.robotSizeX, config.robotSizeY);
-    const double growSize = smallerRobotSize / 2.0 + 1e-5;
+    const double growSize = std::sqrt(
+    std::pow(config.robotSizeX / 2.0, 2) +
+    std::pow(config.robotSizeY / 2.0, 2));
 
     Eigen::Vector3d min(-growSize, -growSize, 0);
     Eigen::Vector3d max(-min);
@@ -517,10 +518,10 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
     Eigen::Quaterniond robotOrientation(rotation_matrix);
     Eigen::Vector3d robotSize{config.robotSizeX, config.robotSizeY, config.robotHeight};
 
-
     //TODO: Old code use for now to get the intersection with MLS
-    const double smallerRobotSize = std::min(config.robotSizeX, config.robotSizeY);
-    const double growSize = smallerRobotSize / 2.0 + 1e-5;
+    const double growSize = std::sqrt(
+    std::pow(config.robotSizeX / 2.0, 2) +
+    std::pow(config.robotSizeY / 2.0, 2));
 
     Eigen::Vector3d min(-growSize, -growSize, 0);
     Eigen::Vector3d max(-min);
