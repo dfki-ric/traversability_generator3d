@@ -36,3 +36,4 @@ travConfig:
   traverseRocks: false
   traverseGravel: true
   traverseConcrete: true
+  obstacleInflationMultiplier: 0.0

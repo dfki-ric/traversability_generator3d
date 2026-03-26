@@ -17,7 +17,9 @@ The library takes an MLS map as input and produces a `TraversabilityMap3d` enric
 - Plane fitting with **PCL RANSAC**  
 - Slope and step height checks using **AABB/OBB** methods with **CGAL**
 - Orientation-dependent motion constraints (incline limiting)  
-- Robot footprint-aware **obstacle and frontier inflation**  
+- **Robot radius-based collision checking** for precise obstacle detection
+- **Configurable obstacle inflation** for safety margins
+- **Frontier detection and inflation**
 - **Soil-aware traversability** (sand, gravel, rocks, concrete) with uncertainty propagation  
 - ROS/ROS2 compatibility and RViz visualization support  
 
@@ -85,6 +87,34 @@ Each soil sample is modeled as a **Gaussian distribution** over the map with con
 - `uncertainty ∈ [0,1]` – confidence of the soil label
 
 This allows **soft, probabilistic integration** of sparse soil observations into the traversability map.
+
+---
+
+## Configuration Parameters
+
+Key parameters in `TraversabilityConfig` that control traversability generation:
+
+### Obstacle and Collision Checking
+- **`maxStepHeight`** – Maximum step height the robot can traverse (default: 0.05m)
+- **`robotSizeX`, `robotSizeY`** – Robot footprint dimensions for collision checking (default: 0.5m)
+- **`robotHeight`** – Robot body height including clearance to ground (default: 0.5m)
+- **`obstacleInflationMultiplier`** – Scales robot radius during collision checking for safety margins (default: 0.5)
+
+### Slope and Incline Constraints
+- **`maxSlope`** – Maximum traversable slope in radians (default: 0.45 rad ≈ 26°)
+- **`inclineLimittingMinSlope`** – Minimum slope where incline limiting activates (default: 0.22 rad)
+- **`inclineLimittingLimit`** – Maximum path deviation from steepest slope direction (default: 0.43 rad)
+- **`enableInclineLimitting`** – Enable orientation constraints on steep terrain (default: false)
+
+### Grid and Detection
+- **`gridResolution`** – Resolution of traversability map (default: 0.3m)
+- **`minTraversablePercentage`** – Threshold for unknown patch detection (default: 0.5)
+- **`costFunctionDist`** – Corridor width for cost function influence (default: 0.0m)
+
+### Soil and Movement
+- **`useSoilInformation`** – Enable soil-aware traversability (default: false)
+- **`traverseSand`, `traverseRocks`, `traverseGravel`, `traverseConcrete`** – Soil type traversability flags
+- **`allowForwardDownhill`** – Allow forward downhill movement (default: true)
 
 ---
 
