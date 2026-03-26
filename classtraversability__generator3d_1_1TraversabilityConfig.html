@@ -88,6 +88,8 @@ Public Attributes</h2></td></tr>
 <tr class="separator:a1befb8dda050e30090eedf44d6eed832"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aa81feafe60639945935aeb669270ca79" id="r_aa81feafe60639945935aeb669270ca79"><td class="memItemLeft" align="right" valign="top"><a class="el" href="TraversabilityGenerator3d_8hpp.html#af8597bd99e23c2431d8a5005006291f1">double</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classtraversability__generator3d_1_1TraversabilityConfig.html#aa81feafe60639945935aeb669270ca79">initialPatchVariance</a></td></tr>
 <tr class="separator:aa81feafe60639945935aeb669270ca79"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7de44353379608081c36fcd608acb065" id="r_a7de44353379608081c36fcd608acb065"><td class="memItemLeft" align="right" valign="top"><a class="el" href="TraversabilityGenerator3d_8hpp.html#af8597bd99e23c2431d8a5005006291f1">double</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classtraversability__generator3d_1_1TraversabilityConfig.html#a7de44353379608081c36fcd608acb065">obstacleInflationMultiplier</a></td></tr>
+<tr class="separator:a7de44353379608081c36fcd608acb065"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a3bd710726e98dc3b438b07edd60782dc" id="r_a3bd710726e98dc3b438b07edd60782dc"><td class="memItemLeft" align="right" valign="top"><a class="el" href="TraversabilityGenerator3d_8hpp.html#af8597bd99e23c2431d8a5005006291f1">bool</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classtraversability__generator3d_1_1TraversabilityConfig.html#a3bd710726e98dc3b438b07edd60782dc">allowForwardDownhill</a></td></tr>
 <tr class="separator:a3bd710726e98dc3b438b07edd60782dc"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a702576fab9ae8b1c80cd6c5802174edb" id="r_a702576fab9ae8b1c80cd6c5802174edb"><td class="memItemLeft" align="right" valign="top"><a class="el" href="TraversabilityGenerator3d_8hpp.html#af8597bd99e23c2431d8a5005006291f1">bool</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classtraversability__generator3d_1_1TraversabilityConfig.html#a702576fab9ae8b1c80cd6c5802174edb">enableInclineLimitting</a></td></tr>
@@ -290,6 +292,21 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 <p>This value controls, how unknown patches are detected. If only a certain percentage of MSL patches are present, on the surface of a traversability patch, it is rated an unknown patch. </p>
+
+</div>
+</div>
+<a id="a7de44353379608081c36fcd608acb065" name="a7de44353379608081c36fcd608acb065"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7de44353379608081c36fcd608acb065">&#9670;&#160;</a></span>obstacleInflationMultiplier</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="TraversabilityGenerator3d_8hpp.html#af8597bd99e23c2431d8a5005006291f1">double</a> traversability_generator3d::TraversabilityConfig::obstacleInflationMultiplier</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Multiplier (0.0-1.0) for obstacle inflation radius calculation. Affects how much the obstacles are inflated around the robot footprint. Default is 0.5 (half the robot diagonal). Higher values = more conservative inflation. </p>
 
 </div>
 </div>

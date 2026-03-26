@@ -57,8 +57,9 @@ Features</h1>
 <li>Slope and step height checks using <b>AABB/OBB</b> methods with <b>CGAL</b></li>
 <li>Orientation-dependent motion constraints (incline limiting) <br  />
 </li>
-<li>Robot footprint-aware <b>obstacle and frontier inflation</b> <br  />
-</li>
+<li><b>Robot radius-based collision checking</b> for precise obstacle detection</li>
+<li><b>Configurable obstacle inflation</b> for safety margins</li>
+<li><b>Frontier detection and inflation</b></li>
 <li><b>Soil-aware traversability</b> (sand, gravel, rocks, concrete) with uncertainty propagation <br  />
 </li>
 <li>ROS/ROS2 compatibility and RViz visualization support <br  />
@@ -136,8 +137,46 @@ Soil-Aware Traversability</h1>
 <p>This allows <b>soft, probabilistic integration</b> of sparse soil observations into the traversability map.</p>
 <hr  />
 <h1><a class="anchor" id="autotoc_md8"></a>
-Interactive GUI</h1>
+Configuration Parameters</h1>
+<p>Key parameters in <code>TraversabilityConfig</code> that control traversability generation:</p>
 <h2><a class="anchor" id="autotoc_md9"></a>
+Obstacle Detection and Inflation</h2>
+<ul>
+<li>**<code>maxStepHeight</code>** – Maximum step height the robot can traverse (default: 0.05m)</li>
+<li>**<code>obstacleInflationMultiplier</code>** – Scales robot radius for collision checking safety margins (default: 1.0)</li>
+</ul>
+<h2><a class="anchor" id="autotoc_md10"></a>
+Robot Configuration</h2>
+<ul>
+<li>**<code>robotHeight</code>** – Robot body height including clearance to ground (default: 0.5m)</li>
+<li>**<code>robotSizeX</code>, <code>robotSizeY</code>** – Robot footprint dimensions (default: 0.5m)</li>
+<li>**<code>distToGround</code>** – Distance from body frame origin to ground (default: 0m)</li>
+<li>**<code>maxSlope</code>** – Maximum traversable slope in radians (default: 0.45 rad ≈ 26°)</li>
+<li>**<code>inclineLimittingMinSlope</code>** – Minimum slope where incline limiting activates (default: 0.22 rad)</li>
+<li>**<code>inclineLimittingLimit</code>** – Maximum path deviation from steepest slope direction (default: 0.43 rad)</li>
+<li>**<code>enableInclineLimitting</code>** – Enable orientation constraints on steep terrain (default: false)</li>
+<li>**<code>slopeMetric</code>** – Slope calculation method: <code>NONE</code>, <code>AVG_SLOPE</code>, <code>MAX_SLOPE</code>, <code>TRIANGLE_SLOPE</code> (default: NONE)</li>
+<li>**<code>slopeMetricScale</code>** – Scale factor for slope metric (default: 1.0)</li>
+</ul>
+<h2><a class="anchor" id="autotoc_md11"></a>
+Grid and Detection</h2>
+<ul>
+<li>**<code>gridResolution</code>** – Resolution of traversability map (default: 0.3m)</li>
+<li>**<code>initialPatchVariance</code>** – Initial variance for patch generation (default: 0.0001)</li>
+<li>**<code>minTraversablePercentage</code>** – Threshold for unknown patch detection (default: 0.5)</li>
+<li>**<code>costFunctionDist</code>** – Corridor width for cost function influence (default: 0.0m)</li>
+</ul>
+<h2><a class="anchor" id="autotoc_md12"></a>
+Soil and Movement</h2>
+<ul>
+<li>**<code>useSoilInformation</code>** – Enable soil-aware traversability (default: false)</li>
+<li>**<code>traverseSand</code>, <code>traverseRocks</code>, <code>traverseGravel</code>, <code>traverseConcrete</code>** – Soil type traversability flags</li>
+<li>**<code>allowForwardDownhill</code>** – Allow forward downhill movement (default: true)</li>
+</ul>
+<hr  />
+<h1><a class="anchor" id="autotoc_md14"></a>
+Interactive GUI</h1>
+<h2><a class="anchor" id="autotoc_md15"></a>
 GUI Controls</h2>
 <p>Below the visualization window, the GUI provides:</p>
 <ul>
@@ -158,7 +197,7 @@ GUI Controls</h2>
 </ul>
 </li>
 </ul>
-<h2><a class="anchor" id="autotoc_md10"></a>
+<h2><a class="anchor" id="autotoc_md16"></a>
 Interaction Logic</h2>
 <ul>
 <li><b>Left-click on MLS Map with “No selection”</b><ul>
@@ -179,22 +218,24 @@ Interaction Logic</h2>
 </li>
 </ul>
 <p>This interaction model ensures a <b>clear separation</b> between navigation setup and environment annotation.</p>
-<h1><a class="anchor" id="autotoc_md11"></a>
+<h1><a class="anchor" id="autotoc_md17"></a>
 Run Example with Test Data</h1>
 <p>You can quickly verify the setup by downloading and running the provided test datasets. <br  />
 </p>
-<h2><a class="anchor" id="autotoc_md12"></a>
+<h2><a class="anchor" id="autotoc_md18"></a>
 1. Download the sample point clouds</h2>
 <div class="fragment"><div class="line">wget https://zenodo.org/records/13771864/files/utah.ply</div>
 <div class="line">wget https://zenodo.org/records/13771864/files/test_area.ply</div>
-</div><!-- fragment --><h2><a class="anchor" id="autotoc_md13"></a>
+<div class="line">wget https://zenodo.org/record/13789320/files/parking_deck.ply</div>
+</div><!-- fragment --><h2><a class="anchor" id="autotoc_md19"></a>
 2. Run the traversability generator</h2>
 <div class="fragment"><div class="line">./build/gui/traversability_generator3d_bin-qt5 utah.ply</div>
 <div class="line">./build/gui/traversability_generator3d_bin-qt5 test_area.ply</div>
+<div class="line">./build/gui/traversability_generator3d_bin-qt5 parking_deck.ply</div>
 </div><!-- fragment --> <blockquote class="doxtable">
 <p>&zwj;💡 <b>Tip:</b> The following enviroment variables can be used to control the behaviour of the logger: <b>BASE_LOG_LEVEL</b> Set to one of DEBUG, INFO, WARN, ERROR or FATAL to define the maximum logging level. </p>
 </blockquote>
-<h2><a class="anchor" id="autotoc_md14"></a>
+<h2><a class="anchor" id="autotoc_md20"></a>
 3. Inspect the results in the GUI</h2>
 <ul>
 <li>After the GUI loads, <b>left-click on the MLS map</b>. <br  />
@@ -202,7 +243,7 @@ Run Example with Test Data</h1>
 <li>The corresponding <b>TraversabilityMap3d</b> will expand and display navigable vs. non-navigable regions. <br  />
 </li>
 </ul>
-<h2><a class="anchor" id="autotoc_md15"></a>
+<h2><a class="anchor" id="autotoc_md21"></a>
 4. Code Walkthrough</h2>
 <p>A minimal executable is provided to demonstrate the full traversability generation pipeline on a real 3D point cloud. The walkthrough loads a point cloud, builds the MLS map, and computes the traversability and frontier regions.</p>
 <blockquote class="doxtable">
@@ -210,7 +251,7 @@ Run Example with Test Data</h1>
  If your point cloud is offset or uses a different coordinate frame, update the start position accordingly to ensure expansion begins on the ground surface. </p>
 </blockquote>
 <p>Run the walkthrough using: </p><div class="fragment"><div class="line">./build/test/travgen3d_walkthrough utah.ply</div>
-</div><!-- fragment --><h2><a class="anchor" id="autotoc_md16"></a>
+</div><!-- fragment --><h2><a class="anchor" id="autotoc_md22"></a>
 5. Tests</h2>
 <p>The traversability generator is validated using unit tests. The tests cover core functionality such as:</p>
 <ul>
@@ -220,11 +261,11 @@ Run Example with Test Data</h1>
 </ul>
 <p>To build and run the test suite:</p>
 <div class="fragment"><div class="line">./build/test/test_TraversabilityGenerator3d</div>
-</div><!-- fragment --><h1><a class="anchor" id="autotoc_md17"></a>
+</div><!-- fragment --><h1><a class="anchor" id="autotoc_md23"></a>
 Acknowledgements</h1>
 <p>This library was developed at the <a href="https://robotik.dfki-bremen.de/en/startpage.html">DFKI Robotics Innovation Center</a> and funded by the <b>German Federal Ministry of Education and Research (BMBF)</b>. <br  />
 </p>
-<h1><a class="anchor" id="autotoc_md18"></a>
+<h1><a class="anchor" id="autotoc_md24"></a>
 License</h1>
 <p>This project is released under the [BSD-3-Clause License](LICENSE). </p>
 </div></div><!-- PageDoc -->
