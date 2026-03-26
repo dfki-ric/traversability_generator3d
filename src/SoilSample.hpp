@@ -25,14 +25,14 @@ class SoilSample
 public:
     
     SoilSample(): type(SoilType::UNKNOWN_SOIL), 
+                  location(0,0,0),
                   sigmaX(1), 
                   sigmaY(1), 
-                  uncertainty(0),
-                  location(0,0,0){};
+                  uncertainty(0){};
 
-    base::Vector3d location;  
     SoilType type;
-    double sigmaX,sigmaY;
+    base::Vector3d location;  
+    double sigmaX, sigmaY;
     double uncertainty;
 
     bool isValid() const {
