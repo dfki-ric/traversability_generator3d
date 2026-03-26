@@ -166,12 +166,14 @@ You can quickly verify the setup by downloading and running the provided test da
 ```bash
 wget https://zenodo.org/records/13771864/files/utah.ply
 wget https://zenodo.org/records/13771864/files/test_area.ply
+wget https://zenodo.org/record/13789320/files/parking_deck.ply
 ```
 
 ### 2. Run the traversability generator
 ```bash
 ./build/gui/traversability_generator3d_bin-qt5 utah.ply
 ./build/gui/traversability_generator3d_bin-qt5 test_area.ply
+./build/gui/traversability_generator3d_bin-qt5 parking_deck.ply
 ```
 > 💡 **Tip:** The following enviroment variables can be used to control the behaviour of the logger: **BASE_LOG_LEVEL** Set to one of DEBUG, INFO, WARN, ERROR or FATAL to define the maximum logging level.
 
