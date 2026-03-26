@@ -94,20 +94,26 @@ This allows **soft, probabilistic integration** of sparse soil observations into
 
 Key parameters in `TraversabilityConfig` that control traversability generation:
 
-### Obstacle and Collision Checking
+### Obstacle Detection and Inflation
 - **`maxStepHeight`** – Maximum step height the robot can traverse (default: 0.05m)
-- **`robotSizeX`, `robotSizeY`** – Robot footprint dimensions for collision checking (default: 0.5m)
-- **`robotHeight`** – Robot body height including clearance to ground (default: 0.5m)
-- **`obstacleInflationMultiplier`** – Scales robot radius during collision checking for safety margins (default: 0.5)
+- **`obstacleInflationMultiplier`** – Scales robot radius for collision checking safety margins (default: 1.0)
 
-### Slope and Incline Constraints
+### Robot Configuration
+- **`robotHeight`** – Robot body height including clearance to ground (default: 0.5m)
+- **`robotSizeX`, `robotSizeY`** – Robot footprint dimensions (default: 0.5m)
+- **`distToGround`** – Distance from body frame origin to ground (default: 0m)
+
+
 - **`maxSlope`** – Maximum traversable slope in radians (default: 0.45 rad ≈ 26°)
 - **`inclineLimittingMinSlope`** – Minimum slope where incline limiting activates (default: 0.22 rad)
 - **`inclineLimittingLimit`** – Maximum path deviation from steepest slope direction (default: 0.43 rad)
 - **`enableInclineLimitting`** – Enable orientation constraints on steep terrain (default: false)
+- **`slopeMetric`** – Slope calculation method: `NONE`, `AVG_SLOPE`, `MAX_SLOPE`, `TRIANGLE_SLOPE` (default: NONE)
+- **`slopeMetricScale`** – Scale factor for slope metric (default: 1.0)
 
 ### Grid and Detection
 - **`gridResolution`** – Resolution of traversability map (default: 0.3m)
+- **`initialPatchVariance`** – Initial variance for patch generation (default: 0.0001)
 - **`minTraversablePercentage`** – Threshold for unknown patch detection (default: 0.5)
 - **`costFunctionDist`** – Corridor width for cost function influence (default: 0.0m)
 
