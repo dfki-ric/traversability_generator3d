@@ -144,6 +144,8 @@ void TraversabilityGenerator3dGui::loadTravConfigFromYaml(const std::string& fil
     travConfig.traverseRocks            = cfg["traverseRocks"].as<bool>();
     travConfig.traverseGravel           = cfg["traverseGravel"].as<bool>();
     travConfig.traverseConcrete         = cfg["traverseConcrete"].as<bool>();
+    
+    travConfig.obstacleInflationMultiplier = cfg["obstacleInflationMultiplier"] ? cfg["obstacleInflationMultiplier"].as<double>() : travConfig.obstacleInflationMultiplier;
 
     // enum
     std::string s = cfg["slopeMetric"].as<std::string>();

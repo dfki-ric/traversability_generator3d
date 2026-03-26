@@ -36,4 +36,6 @@ travConfig:
   traverseRocks: false
   traverseGravel: true
   traverseConcrete: true
-  obstacleInflationMultiplier: 0.0
+
+  # obstacle inflation for safety margins (scales robot radius)
+  obstacleInflationMultiplier: 1.0

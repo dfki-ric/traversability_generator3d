@@ -32,7 +32,7 @@ public:
         , slopeMetric(NONE)
         , gridResolution(0.3)
         , initialPatchVariance(0.01 * 0.01)
-        , obstacleInflationMultiplier(0.5)
+        , obstacleInflationMultiplier(1.0)
         , allowForwardDownhill(true)
         , enableInclineLimitting(false)
         , useSoilInformation(false)
