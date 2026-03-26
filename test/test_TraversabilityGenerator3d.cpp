@@ -81,12 +81,13 @@ BOOST_FIXTURE_TEST_CASE(check_travmap, TraversabilityGenerator3dTest){
 
     std::shared_ptr<maps::grid::MLSMapSloped> mlsPtr = std::make_shared<maps::grid::MLSMapSloped>(mls);
     traversabilityConfig.gridResolution = 0.3;
+    traversabilityConfig.maxStepHeight = 0.1;
 
     travGen = new traversability_generator3d::TraversabilityGenerator3d(traversabilityConfig);
     travGen->setMLSGrid(mlsPtr);            
 
     std::vector<Eigen::Vector3d> startPositions;
-    startPositions.emplace_back(Eigen::Vector3d(0,0,0));
+    startPositions.emplace_back(Eigen::Vector3d(0.0, 0.0, 0.0));
     travGen->expandAll(startPositions);
 
     Eigen::Vector3d positionUnknown{1.2, 0.0, 0};
@@ -107,12 +108,11 @@ BOOST_FIXTURE_TEST_CASE(check_travmap, TraversabilityGenerator3dTest){
     auto inflatedFrontier = travGen->findMatchingTraversabilityPatchAt(idxInflatedFrontier,0);
     BOOST_CHECK_EQUAL(inflatedFrontier->getUserData().nodeType, ::traversability_generator3d::NodeType::INFLATED_FRONTIER);
 
-    Eigen::Vector3d positionObs{0.65, 0.65, 0};
+    Eigen::Vector3d positionObs{0.9, 0.9, 0};
     maps::grid::Index idxObstacleNode;
     travGen->getTraversabilityMap().toGrid(positionObs, idxObstacleNode);
-    auto &trList(travGen->getTraversabilityMap().at(idxObstacleNode));
     auto obstacle = travGen->findMatchingTraversabilityPatchAt(idxObstacleNode,0);
-    BOOST_CHECK_EQUAL(obstacle->getUserData().nodeType, ::maps::grid::TraversabilityNodeBase::OBSTACLE);
+    BOOST_CHECK_EQUAL(obstacle->getUserData().nodeType, ::traversability_generator3d::NodeType::OBSTACLE);
 
     Eigen::Vector3d positionInfObst{0.9, 0.3, 0};
     maps::grid::Index idxInfObstNode;
@@ -124,7 +124,7 @@ BOOST_FIXTURE_TEST_CASE(check_travmap, TraversabilityGenerator3dTest){
     maps::grid::Index idxTraversableNode;
     travGen->getTraversabilityMap().toGrid(positionTrav, idxTraversableNode);
     auto traversable = travGen->findMatchingTraversabilityPatchAt(idxTraversableNode,0);
-    BOOST_CHECK_EQUAL(traversable->getType(), ::maps::grid::TraversabilityNodeBase::TRAVERSABLE);
+    BOOST_CHECK_EQUAL(traversable->getUserData().nodeType, ::traversability_generator3d::NodeType::TRAVERSABLE);
 
     delete travGen;
 }
