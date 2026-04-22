@@ -463,10 +463,11 @@ bool TraversabilityGenerator3d::checkStepHeightAABB(TravGenNode *node)
         for(size_t x = 0; x < area.getNumCells().x() - 1; x++, curIndex.x() += 1)
         {
             Eigen::Vector3d pos;
-            if (!area.fromGrid(Index(x, y), pos)) {
-                LOG_ERROR_S << "TraversabilityGenerator3d: fromGrid failed for index (" 
-                            << x << ", " << y 
-                            << ") — intersected area with MLS is invalid.";
+            // Convert grid index directly to world coordinates
+            if (!mlsGrid->fromGrid(curIndex, pos)) {
+                LOG_ERROR_S << "TraversabilityGenerator3d: fromGrid failed for grid index "
+                            << curIndex << " — index outside MLS grid bounds.";
+                continue;
             }
 
             for(const SurfacePatch<MLSConfig::SLOPE> *p : area.at(x, y))
@@ -563,14 +564,12 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
         for(size_t x = 0; x < area.getNumCells().x() - 1; x++, curIndex.x() += 1)
         {
             Eigen::Vector3d pos;
-            if (!area.fromGrid(Index(x, y), pos)) {
-                LOG_ERROR_S << "TraversabilityGenerator3d: fromGrid() failed at index (" << x << ", " << y
-                            << ") — expected valid position but got none.";
+            // Convert grid index directly to world coordinates instead of using view-local coords
+            if (!mlsGrid->fromGrid(curIndex, pos)) {
+                LOG_ERROR_S << "TraversabilityGenerator3d: fromGrid failed for grid index " 
+                            << curIndex << " — index outside MLS grid bounds.";
+                continue;
             }
-
-            //TODO: Fix the real cause of the offset!
-            pos.x() += nodePos.x() - 1.5 * config.gridResolution;
-            pos.y() += nodePos.y() - 1.5 * config.gridResolution;
 
             for(const SurfacePatch<MLSConfig::SLOPE> *p : area.at(x, y))
             {
