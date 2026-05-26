@@ -417,13 +417,14 @@ bool TraversabilityGenerator3d::checkStepHeightAABB(TravGenNode *node)
     nodePos.z() += node->getHeight();
 
     // Use the actual robot half-dimensions for the AABB search so that the
-    // detection distance is proportional to the robot footprint in each axis.
-    // Previously growSize = half-diagonal was used uniformly in X and Y, creating
-    // a square search area that overshot the footprint asymmetrically: more on the
-    // short-axis sides than the long-axis front/back, causing varying collision
-    // detection distances depending on obstacle direction.
-    Eigen::Vector3d min(-config.robotSizeX / 2.0, -config.robotSizeY / 2.0, 0);
-    Eigen::Vector3d max( config.robotSizeX / 2.0,  config.robotSizeY / 2.0, config.robotHeight);
+    // Use the smaller half-dimension as a uniform search radius on both axes.
+    // This keeps the AABB square and avoids a large dead-zone near map boundaries
+    // when robotSizeX >> robotSizeY (or vice-versa).  Cells closer than
+    // min(halfX, halfY) to any obstacle are already obstacle-free by construction;
+    // the remaining gap to the rotation-safe circle is covered by inflateObstacles.
+    const double halfSmall = std::min(config.robotSizeX, config.robotSizeY) / 2.0;
+    Eigen::Vector3d min(-halfSmall, -halfSmall, 0);
+    Eigen::Vector3d max( halfSmall,  halfSmall, config.robotHeight);
 
     min += nodePos;
     max += nodePos;
@@ -520,8 +521,9 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
     Eigen::Quaterniond robotOrientation(rotation_matrix);
     Eigen::Vector3d robotSize{config.robotSizeX, config.robotSizeY, config.robotHeight};
 
-    Eigen::Vector3d min(-config.robotSizeX / 2.0, -config.robotSizeY / 2.0, 0);
-    Eigen::Vector3d max( config.robotSizeX / 2.0,  config.robotSizeY / 2.0, config.robotHeight);
+    const double halfSmall = std::min(config.robotSizeX, config.robotSizeY) / 2.0;
+    Eigen::Vector3d min(-halfSmall, -halfSmall, 0);
+    Eigen::Vector3d max( halfSmall,  halfSmall, config.robotHeight);
 
     min += nodePos;
     max += nodePos;
@@ -730,6 +732,7 @@ void TraversabilityGenerator3d::inflateObstacles()
 {
     const double halfRobotSizeX = config.robotSizeX / 2.0;
     const double halfRobotSizeY = config.robotSizeY / 2.0;
+
     // The AABB check already keeps the robot centre at least min(halfX, halfY) away
     // from any obstacle (the tight-axis footprint boundary).  We only need to inflate
     // by the remaining gap to half_diagonal so that the robot can still rotate freely
@@ -744,10 +747,30 @@ void TraversabilityGenerator3d::inflateObstacles()
     // gap is sub-grid and nothing gets inflated at all.
     const double inflGap = halfDiagonal - std::min(halfRobotSizeX, halfRobotSizeY);
 
+    // obstacleInflationMultiplier must be at least 1.0: the AABB/OBB collision check
+    // now uses only min(sizeX, sizeY)/2 as its search radius, so inflateObstacles
+    // must cover the remaining gap out to the larger half-dimension.  A multiplier
+    // below 1.0 would leave that gap unguarded.  Users may increase above 1.0 for
+    // extra safety margins.
+    if (config.obstacleInflationMultiplier < 1.0)
+    {
+        LOG_WARN_S << "TraversabilityGenerator3d: obstacleInflationMultiplier is "
+                   << config.obstacleInflationMultiplier
+                   << ", which is below the enforced minimum of 1.0. "
+                      "The AABB/OBB step-height check uses only min(robotSizeX, robotSizeY)/2 "
+                      "as its search radius; inflateObstacles must cover the remaining gap, "
+                      "so a multiplier < 1.0 would leave part of the robot footprint unguarded. "
+                      "Clamping to 1.0.";
+    }
+    const double effectiveMultiplier = std::max(1.0, config.obstacleInflationMultiplier);
+
     // Minimum is gridResolution*1.1, not gridResolution exactly: the distance check
     // compares cell centres, so a bare gridResolution threshold can miss neighbours
     // whose computed centre-to-centre distance is at gridResolution + floating-point noise.
-    const double inflRadius = config.obstacleInflationMultiplier *
+
+    // This is specially relevant for small robots with sizeY/2 close to gridResolution, where the gap is sub-grid and 
+    // the inflation would otherwise fail to trigger at all.
+    const double inflRadius = effectiveMultiplier *
         std::max(inflGap, config.gridResolution * 1.1) + 1e-5;
 
     for (TravGenNode *n : obstacleNodesGrowList)
@@ -765,6 +788,7 @@ void TraversabilityGenerator3d::inflateObstacles()
             // grid step apart.  Inflation radius is a horizontal clearance
             // concept, so comparing only the XY offset is correct.
             const Index diff = neighbor->getIndex() - nIdx;
+            
             const double dist2D = diff.matrix().cast<double>().norm() * config.gridResolution;
             if (dist2D < inflRadius)
             {
