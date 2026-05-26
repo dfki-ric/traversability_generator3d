@@ -728,9 +728,16 @@ void TraversabilityGenerator3d::expandAll(TravGenNode* startNode, const double e
 
 void TraversabilityGenerator3d::inflateObstacles()
 {
-    const double halfRobotSizeX = config.robotSizeX / 2;
-    const double halfRobotSizeY = config.robotSizeY / 2;
-    const double inflRadius = config.obstacleInflationMultiplier * std::sqrt((halfRobotSizeX * halfRobotSizeX) + (halfRobotSizeY * halfRobotSizeY)) + 1e-5;
+    const double halfRobotSizeX = config.robotSizeX / 2.0;
+    const double halfRobotSizeY = config.robotSizeY / 2.0;
+    // The AABB check already keeps the robot centre at least min(halfX, halfY) away
+    // from any obstacle (the tight-axis footprint boundary).  We only need to inflate
+    // by the remaining gap to half_diagonal so that the robot can still rotate freely
+    // at the edge of the traversable zone without its corners hitting the obstacle.
+    // Using the full half_diagonal here double-counts the footprint clearance and
+    // closes far too much traversable space, especially in narrow corridors.
+    const double halfDiagonal = std::sqrt(halfRobotSizeX * halfRobotSizeX + halfRobotSizeY * halfRobotSizeY);
+    const double inflRadius = config.obstacleInflationMultiplier * (halfDiagonal - std::min(halfRobotSizeX, halfRobotSizeY)) + 1e-5;
 
     for (TravGenNode *n : obstacleNodesGrowList)
     {
