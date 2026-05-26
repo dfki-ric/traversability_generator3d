@@ -742,8 +742,11 @@ void TraversabilityGenerator3d::inflateObstacles()
     // least one ring of cells — otherwise, when sizeY/2 ~ gridResolution the
     // gap is sub-grid and nothing gets inflated at all.
     const double inflGap = halfDiagonal - std::min(halfRobotSizeX, halfRobotSizeY);
+    // Minimum is gridResolution*1.1, not gridResolution exactly: the distance check
+    // compares cell centres, so a bare gridResolution threshold can miss neighbours
+    // whose computed centre-to-centre distance is at gridResolution + floating-point noise.
     const double inflRadius = config.obstacleInflationMultiplier *
-        std::max(inflGap, config.gridResolution) + 1e-5;
+        std::max(inflGap, config.gridResolution * 1.1) + 1e-5;
 
     for (TravGenNode *n : obstacleNodesGrowList)
     {
