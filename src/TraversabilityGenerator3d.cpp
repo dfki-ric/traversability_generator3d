@@ -737,7 +737,13 @@ void TraversabilityGenerator3d::inflateObstacles()
     // Using the full half_diagonal here double-counts the footprint clearance and
     // closes far too much traversable space, especially in narrow corridors.
     const double halfDiagonal = std::sqrt(halfRobotSizeX * halfRobotSizeX + halfRobotSizeY * halfRobotSizeY);
-    const double inflRadius = config.obstacleInflationMultiplier * (halfDiagonal - std::min(halfRobotSizeX, halfRobotSizeY)) + 1e-5;
+    // Geometric gap between the AABB boundary and the rotation-safe circle.
+    // Clamped to at least one grid step so that the inflation always covers at
+    // least one ring of cells — otherwise, when sizeY/2 ~ gridResolution the
+    // gap is sub-grid and nothing gets inflated at all.
+    const double inflGap = halfDiagonal - std::min(halfRobotSizeX, halfRobotSizeY);
+    const double inflRadius = config.obstacleInflationMultiplier *
+        std::max(inflGap, config.gridResolution) + 1e-5;
 
     for (TravGenNode *n : obstacleNodesGrowList)
     {
