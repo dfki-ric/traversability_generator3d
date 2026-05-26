@@ -37,5 +37,9 @@ travConfig:
   traverseGravel: true
   traverseConcrete: true
 
-  # obstacle inflation for safety margins (scales robot radius)
+  # obstacle inflation for safety margins (scales the inflation gap beyond the
+  # AABB/OBB collision radius).  Minimum enforced value is 1.0 — setting it lower
+  # is silently clamped and a warning is logged, because the step-height check only
+  # searches within min(robotSizeX, robotSizeY)/2 and inflation must cover the rest
+  # of the footprint.  Increase above 1.0 for extra safety margins.
   obstacleInflationMultiplier: 1.0
