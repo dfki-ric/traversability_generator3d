@@ -16,6 +16,10 @@
 #include <fstream>
 #include <traversability_generator3d/SoilNode.hpp>
 #include <yaml-cpp/yaml.h>
+#include <osg/MatrixTransform>
+#include <osg/Geode>
+#include <osg/ShapeDrawable>
+#include <osg/PolygonMode>
 
 #ifdef ENABLE_DEBUG_DRAWINGS
 #include <vizkit3d_debug_drawings/DebugDrawing.hpp>
@@ -97,6 +101,18 @@ void TraversabilityGenerator3dGui::setupUI()
     layout->addLayout(soilLayout);
     layout->addWidget(soilHintLabel);
 
+    QHBoxLayout* yawLayout = new QHBoxLayout();
+    yawSpin_ = new QDoubleSpinBox();
+    yawSpin_->setRange(-180.0, 180.0);
+    yawSpin_->setValue(0.0);
+    yawSpin_->setSingleStep(5.0);
+    yawSpin_->setSuffix("\xc2\xb0");  // degree sign
+    yawSpin_->setToolTip("Rotate the robot bounding box preview around its vertical axis");
+    yawLayout->addWidget(new QLabel("Robot yaw:"));
+    yawLayout->addWidget(yawSpin_);
+    yawLayout->addStretch();
+    layout->addLayout(yawLayout);
+
     resetButton = new QPushButton("Reset Traversability and Soil Maps");
     resetButton->setEnabled(false);
     layout->addWidget(resetButton);
@@ -111,6 +127,7 @@ void TraversabilityGenerator3dGui::setupUI()
     connect(&trav3dViz, SIGNAL(picked(float,float,float,int,int)), 
             this, SLOT(picked(float,float,float,int,int)));
     connect(resetButton, SIGNAL(clicked(bool)), this, SLOT(resetTravMap()));
+    connect(yawSpin_, SIGNAL(valueChanged(double)), this, SLOT(onYawChanged(double)));
 }
 
 void TraversabilityGenerator3dGui::loadTravConfigFromYaml(const std::string& file)
@@ -192,6 +209,7 @@ void TraversabilityGenerator3dGui::setupTravGen(int argc, char** argv)
 {
     std::string yaml_file = std::string(TRAV3D_CONFIG_DIR) + "/parameters.yaml";
     loadTravConfigFromYaml(yaml_file);
+    setupRobotBoxViz();
     travGen.reset(new traversability_generator3d::TraversabilityGenerator3d(travConfig));
 
     if(argc > 1)
@@ -314,6 +332,7 @@ void TraversabilityGenerator3dGui::picked(float x, float y, float z,
         start.position.z()));
 
     startPicked = true;
+    updateRobotBoxTransform();
     expandAll();
 }
 
@@ -369,6 +388,9 @@ void TraversabilityGenerator3dGui::resetTravMap()
     start.orientation.setIdentity();
     startViz.setTranslation(QVector3D(0,0,0));
 
+    if (robotBoxTransform_)
+        robotBoxTransform_->setNodeMask(0);
+
 #ifdef ENABLE_DEBUG_DRAWINGS
     V3DD::CLEAR_DRAWING("ugv_nav4d_start_aabb");
 #endif
@@ -376,3 +398,59 @@ void TraversabilityGenerator3dGui::resetTravMap()
     LOG_INFO_S << "Traversability map reset complete.";
 }
 
+void TraversabilityGenerator3dGui::setupRobotBoxViz()
+{
+    // Wireframe box matching the robot footprint; hidden until the user clicks.
+    osg::ref_ptr<osg::Box> osgBox = new osg::Box(
+        osg::Vec3(0.0f, 0.0f, static_cast<float>(travConfig.robotHeight / 2.0)),
+        static_cast<float>(travConfig.robotSizeX),
+        static_cast<float>(travConfig.robotSizeY),
+        static_cast<float>(travConfig.robotHeight));
+
+    osg::ref_ptr<osg::ShapeDrawable> sd = new osg::ShapeDrawable(osgBox);
+    sd->setColor(osg::Vec4(0.0f, 1.0f, 1.0f, 1.0f));  // cyan wireframe
+
+    osg::ref_ptr<osg::Geode> geode = new osg::Geode;
+    geode->addDrawable(sd);
+
+    osg::ref_ptr<osg::StateSet> ss = geode->getOrCreateStateSet();
+    osg::ref_ptr<osg::PolygonMode> pm = new osg::PolygonMode;
+    pm->setMode(osg::PolygonMode::FRONT_AND_BACK, osg::PolygonMode::LINE);
+    ss->setAttribute(pm, osg::StateAttribute::ON);
+    ss->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
+
+    robotBoxTransform_ = new osg::MatrixTransform;
+    robotBoxTransform_->addChild(geode);
+    robotBoxTransform_->setNodeMask(0);  // hidden until first click
+    widget->getRootNode()->addChild(robotBoxTransform_);
+}
+
+void TraversabilityGenerator3dGui::updateRobotBoxTransform()
+{
+    if (!robotBoxTransform_ || !startPicked)
+        return;
+
+    const double yawRad = yawSpin_->value() * M_PI / 180.0;
+
+    // Update the startViz arrow to reflect the chosen heading
+    const Eigen::Quaterniond q(Eigen::AngleAxisd(yawRad, Eigen::Vector3d::UnitZ()));
+    start.orientation = q;
+    startViz.setRotation(QQuaternion(
+        static_cast<float>(q.w()),
+        static_cast<float>(q.x()),
+        static_cast<float>(q.y()),
+        static_cast<float>(q.z())));
+
+    // Rotate around Z then translate to the picked position
+    const osg::Matrix mat =
+        osg::Matrix::rotate(yawRad, osg::Vec3d(0.0, 0.0, 1.0)) *
+        osg::Matrix::translate(start.position.x(), start.position.y(), start.position.z());
+
+    robotBoxTransform_->setMatrix(mat);
+    robotBoxTransform_->setNodeMask(~0u);
+}
+
+void TraversabilityGenerator3dGui::onYawChanged(double /*deg*/)
+{
+    updateRobotBoxTransform();
+}
