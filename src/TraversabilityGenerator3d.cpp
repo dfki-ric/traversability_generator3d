@@ -737,11 +737,13 @@ void TraversabilityGenerator3d::inflateObstacles()
     // Using the full half_diagonal here double-counts the footprint clearance and
     // closes far too much traversable space, especially in narrow corridors.
     const double halfDiagonal = std::sqrt(halfRobotSizeX * halfRobotSizeX + halfRobotSizeY * halfRobotSizeY);
+
     // Geometric gap between the AABB boundary and the rotation-safe circle.
     // Clamped to at least one grid step so that the inflation always covers at
     // least one ring of cells — otherwise, when sizeY/2 ~ gridResolution the
     // gap is sub-grid and nothing gets inflated at all.
     const double inflGap = halfDiagonal - std::min(halfRobotSizeX, halfRobotSizeY);
+
     // Minimum is gridResolution*1.1, not gridResolution exactly: the distance check
     // compares cell centres, so a bare gridResolution threshold can miss neighbours
     // whose computed centre-to-centre distance is at gridResolution + floating-point noise.
@@ -750,10 +752,21 @@ void TraversabilityGenerator3d::inflateObstacles()
 
     for (TravGenNode *n : obstacleNodesGrowList)
     {
+        const Index nIdx = n->getIndex();
         n->eachConnectedNode([&] (maps::grid::TraversabilityNodeBase *neighbor, bool &expandNode, bool &stop)
         {
             TravGenNode* node = static_cast<TravGenNode*>(neighbor);
-            if ((n->getPosition(trMap) - neighbor->getPosition(trMap)).norm() < inflRadius)
+
+            // Use 2D (XY) grid-cell distance for the inflation check.
+            // RANSAC can produce obstacle nodes with slightly wrong heights
+            // (e.g. below the floor plane when wall patches pull the fitted
+            // plane downward), which makes the 3D distance to an adjacent
+            // traversable cell exceed inflRadius even when they are only one
+            // grid step apart.  Inflation radius is a horizontal clearance
+            // concept, so comparing only the XY offset is correct.
+            const Index diff = neighbor->getIndex() - nIdx;
+            const double dist2D = diff.matrix().cast<double>().norm() * config.gridResolution;
+            if (dist2D < inflRadius)
             {
                 if(node->getUserData().nodeType == NodeType::TRAVERSABLE ||
                    node->getUserData().nodeType == NodeType::INFLATED_FRONTIER ||
