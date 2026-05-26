@@ -416,13 +416,14 @@ bool TraversabilityGenerator3d::checkStepHeightAABB(TravGenNode *node)
     }
     nodePos.z() += node->getHeight();
 
-    const double growSize = std::sqrt(
-    std::pow(config.robotSizeX / 2.0, 2) +
-    std::pow(config.robotSizeY / 2.0, 2));
-
-    Eigen::Vector3d min(-growSize, -growSize, 0);
-    Eigen::Vector3d max(-min);
-    max.z() = config.robotHeight;
+    // Use the actual robot half-dimensions for the AABB search so that the
+    // detection distance is proportional to the robot footprint in each axis.
+    // Previously growSize = half-diagonal was used uniformly in X and Y, creating
+    // a square search area that overshot the footprint asymmetrically: more on the
+    // short-axis sides than the long-axis front/back, causing varying collision
+    // detection distances depending on obstacle direction.
+    Eigen::Vector3d min(-config.robotSizeX / 2.0, -config.robotSizeY / 2.0, 0);
+    Eigen::Vector3d max( config.robotSizeX / 2.0,  config.robotSizeY / 2.0, config.robotHeight);
 
     min += nodePos;
     max += nodePos;
@@ -519,14 +520,8 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
     Eigen::Quaterniond robotOrientation(rotation_matrix);
     Eigen::Vector3d robotSize{config.robotSizeX, config.robotSizeY, config.robotHeight};
 
-    //TODO: Old code use for now to get the intersection with MLS
-    const double growSize = std::sqrt(
-    std::pow(config.robotSizeX / 2.0, 2) +
-    std::pow(config.robotSizeY / 2.0, 2));
-
-    Eigen::Vector3d min(-growSize, -growSize, 0);
-    Eigen::Vector3d max(-min);
-    max.z() = config.robotHeight;
+    Eigen::Vector3d min(-config.robotSizeX / 2.0, -config.robotSizeY / 2.0, 0);
+    Eigen::Vector3d max( config.robotSizeX / 2.0,  config.robotSizeY / 2.0, config.robotHeight);
 
     min += nodePos;
     max += nodePos;
