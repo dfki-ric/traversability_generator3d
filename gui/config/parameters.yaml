@@ -12,6 +12,10 @@ travConfig:
   robotSizeY: 0.6
   distToGround: 0.0
 
+  # offset of the robot footprint centre from the body-frame origin [m]
+  # use when the planning reference point is not at the geometric centre of the bounding box
+  robotCenterOffsetX: 0.0
+  robotCenterOffsetY: 0.0
   # slope / terrain constraints
   maxSlope: 0.45                # [rad]
   maxStepHeight: 0.25

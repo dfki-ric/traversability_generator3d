@@ -163,6 +163,8 @@ void TraversabilityGenerator3dGui::loadTravConfigFromYaml(const std::string& fil
     travConfig.traverseConcrete         = cfg["traverseConcrete"].as<bool>();
     
     travConfig.obstacleInflationMultiplier = cfg["obstacleInflationMultiplier"] ? cfg["obstacleInflationMultiplier"].as<double>() : travConfig.obstacleInflationMultiplier;
+    travConfig.robotCenterOffsetX = cfg["robotCenterOffsetX"] ? cfg["robotCenterOffsetX"].as<double>() : 0.0;
+    travConfig.robotCenterOffsetY = cfg["robotCenterOffsetY"] ? cfg["robotCenterOffsetY"].as<double>() : 0.0;
 
     // enum
     std::string s = cfg["slopeMetric"].as<std::string>();

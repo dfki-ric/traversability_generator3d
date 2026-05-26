@@ -134,6 +134,11 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
         return false;
     }
 
+    // Shift to the actual footprint centre when the robot body-frame origin
+    // is not at the geometric centre of the bounding box.
+    nodePos.x() += config.robotCenterOffsetX;
+    nodePos.y() += config.robotCenterOffsetY;
+
     const double growSize = std::min(config.robotSizeX, config.robotSizeY) / 2.0;
 
     //get all surfaces in a cube of robotwidth and stepheight
@@ -416,7 +421,11 @@ bool TraversabilityGenerator3d::checkStepHeightAABB(TravGenNode *node)
     }
     nodePos.z() += node->getHeight();
 
-    // Use the actual robot half-dimensions for the AABB search so that the
+    // Shift to the actual footprint centre when the robot body-frame origin
+    // is not at the geometric centre of the bounding box.
+    nodePos.x() += config.robotCenterOffsetX;
+    nodePos.y() += config.robotCenterOffsetY;
+
     // Use the smaller half-dimension as a uniform search radius on both axes.
     // This keeps the AABB square and avoids a large dead-zone near map boundaries
     // when robotSizeX >> robotSizeY (or vice-versa).  Cells closer than
@@ -503,6 +512,11 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
         return false;
     }
     nodePos.z() += node->getHeight();
+
+    // Shift to the actual footprint centre when the robot body-frame origin
+    // is not at the geometric centre of the bounding box.
+    nodePos.x() += config.robotCenterOffsetX;
+    nodePos.y() += config.robotCenterOffsetY;
 
     Eigen::Vector3d robotCenterPos = nodePos;
     robotCenterPos.z() += config.maxStepHeight + config.robotHeight/2;
@@ -788,7 +802,7 @@ void TraversabilityGenerator3d::inflateObstacles()
             // grid step apart.  Inflation radius is a horizontal clearance
             // concept, so comparing only the XY offset is correct.
             const Index diff = neighbor->getIndex() - nIdx;
-            
+
             const double dist2D = diff.matrix().cast<double>().norm() * config.gridResolution;
             if (dist2D < inflRadius)
             {
