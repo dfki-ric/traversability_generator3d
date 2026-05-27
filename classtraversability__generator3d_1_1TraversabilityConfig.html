@@ -80,10 +80,6 @@ Public Attributes</h2></td></tr>
 <tr class="separator:a161f52cacbb69ad5e740c6d33025d79c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:af08372ff0f18d3d40770f02391a83f87" id="r_af08372ff0f18d3d40770f02391a83f87"><td class="memItemLeft" align="right" valign="top"><a class="el" href="TraversabilityGenerator3d_8hpp.html#af8597bd99e23c2431d8a5005006291f1">double</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classtraversability__generator3d_1_1TraversabilityConfig.html#af08372ff0f18d3d40770f02391a83f87">distToGround</a></td></tr>
 <tr class="separator:af08372ff0f18d3d40770f02391a83f87"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a4035c8dc1490aee99d789b65a4b6d283" id="r_a4035c8dc1490aee99d789b65a4b6d283"><td class="memItemLeft" align="right" valign="top"><a class="el" href="TraversabilityGenerator3d_8hpp.html#af8597bd99e23c2431d8a5005006291f1">double</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classtraversability__generator3d_1_1TraversabilityConfig.html#a4035c8dc1490aee99d789b65a4b6d283">robotCenterOffsetX</a></td></tr>
-<tr class="separator:a4035c8dc1490aee99d789b65a4b6d283"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a300c150a599aa360723faf200e80c53f" id="r_a300c150a599aa360723faf200e80c53f"><td class="memItemLeft" align="right" valign="top"><a class="el" href="TraversabilityGenerator3d_8hpp.html#af8597bd99e23c2431d8a5005006291f1">double</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classtraversability__generator3d_1_1TraversabilityConfig.html#a300c150a599aa360723faf200e80c53f">robotCenterOffsetY</a></td></tr>
-<tr class="separator:a300c150a599aa360723faf200e80c53f"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:af5e080d979c2a447cf033b491e923ce3" id="r_af5e080d979c2a447cf033b491e923ce3"><td class="memItemLeft" align="right" valign="top"><a class="el" href="TraversabilityGenerator3d_8hpp.html#af8597bd99e23c2431d8a5005006291f1">double</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classtraversability__generator3d_1_1TraversabilityConfig.html#af5e080d979c2a447cf033b491e923ce3">slopeMetricScale</a></td></tr>
 <tr class="separator:af5e080d979c2a447cf033b491e923ce3"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a9bdd4995a7fa5f210db7b8b87b4c22fd" id="r_a9bdd4995a7fa5f210db7b8b87b4c22fd"><td class="memItemLeft" align="right" valign="top"><a class="el" href="namespacetraversability__generator3d.html#ab598cf88c20fde6ba2fb890c96add73c">SlopeMetric</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classtraversability__generator3d_1_1TraversabilityConfig.html#a9bdd4995a7fa5f210db7b8b87b4c22fd">slopeMetric</a></td></tr>
@@ -311,35 +307,6 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 <p>Multiplier (0.0-1.0) for obstacle inflation radius calculation. Affects how much the obstacles are inflated around the robot footprint. Default is 0.5 (half the robot diagonal). Higher values = more conservative inflation. </p>
-
-</div>
-</div>
-<a id="a4035c8dc1490aee99d789b65a4b6d283" name="a4035c8dc1490aee99d789b65a4b6d283"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a4035c8dc1490aee99d789b65a4b6d283">&#9670;&#160;</a></span>robotCenterOffsetX</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="TraversabilityGenerator3d_8hpp.html#af8597bd99e23c2431d8a5005006291f1">double</a> traversability_generator3d::TraversabilityConfig::robotCenterOffsetX</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-<p>Offset of the robot footprint centre from the body-frame origin, in the robot's local XY plane. Use when the path-planning reference point does not coincide with the geometric centre of the robot bounding box. The offset is applied when building the AABB/OBB collision-check box and the RANSAC plane-fitting search area. Default: 0.0 for both axes. </p>
-
-</div>
-</div>
-<a id="a300c150a599aa360723faf200e80c53f" name="a300c150a599aa360723faf200e80c53f"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a300c150a599aa360723faf200e80c53f">&#9670;&#160;</a></span>robotCenterOffsetY</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="TraversabilityGenerator3d_8hpp.html#af8597bd99e23c2431d8a5005006291f1">double</a> traversability_generator3d::TraversabilityConfig::robotCenterOffsetY</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
 
 </div>
 </div>
