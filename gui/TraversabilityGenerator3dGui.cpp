@@ -403,14 +403,18 @@ void TraversabilityGenerator3dGui::resetTravMap()
 void TraversabilityGenerator3dGui::setupRobotBoxViz()
 {
     // Wireframe box matching the robot footprint; hidden until the user clicks.
+    // The box centre is offset from the body-frame origin (clicked point) so that
+    // the visualisation matches the collision geometry used in checkStepHeightAABB/OBB.
     osg::ref_ptr<osg::Box> osgBox = new osg::Box(
-        osg::Vec3(0.0f, 0.0f, static_cast<float>(travConfig.robotHeight / 2.0)),
+        osg::Vec3(static_cast<float>(travConfig.robotCenterOffsetX),
+                  static_cast<float>(travConfig.robotCenterOffsetY),
+                  static_cast<float>(travConfig.robotHeight / 2.0)),
         static_cast<float>(travConfig.robotSizeX),
         static_cast<float>(travConfig.robotSizeY),
         static_cast<float>(travConfig.robotHeight));
 
     osg::ref_ptr<osg::ShapeDrawable> sd = new osg::ShapeDrawable(osgBox);
-    sd->setColor(osg::Vec4(0.0f, 1.0f, 1.0f, 1.0f));  // cyan wireframe
+    sd->setColor(osg::Vec4(1.0f, 0.0f, 0.0f, 1.0f));  // red wireframe
 
     osg::ref_ptr<osg::Geode> geode = new osg::Geode;
     geode->addDrawable(sd);
