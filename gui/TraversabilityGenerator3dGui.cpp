@@ -163,8 +163,6 @@ void TraversabilityGenerator3dGui::loadTravConfigFromYaml(const std::string& fil
     travConfig.traverseConcrete         = cfg["traverseConcrete"].as<bool>();
     
     travConfig.obstacleInflationMultiplier = cfg["obstacleInflationMultiplier"] ? cfg["obstacleInflationMultiplier"].as<double>() : travConfig.obstacleInflationMultiplier;
-    travConfig.robotCenterOffsetX = cfg["robotCenterOffsetX"] ? cfg["robotCenterOffsetX"].as<double>() : 0.0;
-    travConfig.robotCenterOffsetY = cfg["robotCenterOffsetY"] ? cfg["robotCenterOffsetY"].as<double>() : 0.0;
 
     // enum
     std::string s = cfg["slopeMetric"].as<std::string>();
@@ -403,12 +401,8 @@ void TraversabilityGenerator3dGui::resetTravMap()
 void TraversabilityGenerator3dGui::setupRobotBoxViz()
 {
     // Wireframe box matching the robot footprint; hidden until the user clicks.
-    // The box centre is offset from the body-frame origin (clicked point) so that
-    // the visualisation matches the collision geometry used in checkStepHeightAABB/OBB.
     osg::ref_ptr<osg::Box> osgBox = new osg::Box(
-        osg::Vec3(static_cast<float>(travConfig.robotCenterOffsetX),
-                  static_cast<float>(travConfig.robotCenterOffsetY),
-                  static_cast<float>(travConfig.robotHeight / 2.0)),
+        osg::Vec3(0.0f, 0.0f, static_cast<float>(travConfig.robotHeight / 2.0)),
         static_cast<float>(travConfig.robotSizeX),
         static_cast<float>(travConfig.robotSizeY),
         static_cast<float>(travConfig.robotHeight));

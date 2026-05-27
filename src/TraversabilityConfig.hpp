@@ -28,8 +28,6 @@ public:
         , robotSizeX(0.5)
         , robotSizeY(0.5)
         , distToGround(0)
-        , robotCenterOffsetX(0.0)
-        , robotCenterOffsetY(0.0)
         , slopeMetricScale(1.0)
         , slopeMetric(NONE)
         , gridResolution(0.3)
@@ -80,14 +78,6 @@ public:
      * start and goal position are expected in body frame
      */
     double distToGround;
-
-    /** Offset of the robot footprint centre from the body-frame origin, in the
-     *  robot's local XY plane.  Use when the path-planning reference point does
-     *  not coincide with the geometric centre of the robot bounding box.
-     *  The offset is applied when building the AABB/OBB collision-check box and
-     *  the RANSAC plane-fitting search area. Default: 0.0 for both axes. */
-    double robotCenterOffsetX;
-    double robotCenterOffsetY;
 
     /** Defines how strong the slope is factored into the
      *  motion cost.*/
