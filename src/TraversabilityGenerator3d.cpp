@@ -941,7 +941,7 @@ void TraversabilityGenerator3d::inflateObstacles()
     const double halfDiagonal = std::sqrt(halfRobotSizeX * halfRobotSizeX + halfRobotSizeY * halfRobotSizeY);
 
     // Geometric gap between the AABB boundary and the rotation-safe circle.
-    const double inflGap = halfDiagonal - std::min(halfRobotSizeX, halfRobotSizeY);
+    const double inflGap = halfDiagonal - std::min(halfRobotSizeX, halfRobotSizeY)/2;
 
     // obstacleInflationMultiplier must be at least 1.0: the AABB/OBB collision check
     // now uses only min(sizeX, sizeY)/2 as its search radius, so inflateObstacles
