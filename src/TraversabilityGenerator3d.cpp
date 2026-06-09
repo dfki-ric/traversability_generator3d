@@ -662,17 +662,19 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
 
             for(const SurfacePatch<MLSConfig::SLOPE> *p : area.at(x, y))
             {
-                Eigen::Vector3f surface(0,0,0);
-                pos.z() = p->getSurfacePos(surface);
+                pos.z() = (p->getTop() + p->getBottom()) / 2.0;
 
                 Polyhedron_3 patch = createPolyhedronFromSurfacePatch(p,pos);
                 if(CGAL::Polygon_mesh_processing::do_intersect(patch,robot))
                 {
 #ifdef ENABLE_DEBUG_DRAWINGS
-                    Eigen::Vector3d patchSize{config.gridResolution, config.gridResolution, patchHeight};
+                    double currentPatchHeight = std::max(0.02, (double)(p->getTop() - p->getBottom()));
+                    Eigen::Vector3d patchSize{config.gridResolution, config.gridResolution, currentPatchHeight};
                     Eigen::Vector3f normalf = p->getNormal(); 
                     Eigen::Vector3d normal{normalf.x(), normalf.y(), normalf.z()};
-                    drawWireFrameBox(normal,pos,patchSize,V3DD::Color::blue);
+                    normal.normalize();
+                    Eigen::Vector3d drawNormal = (std::abs(normal.z()) > 0.707) ? normal : Eigen::Vector3d::UnitZ();
+                    drawWireFrameBox(drawNormal,pos,patchSize,V3DD::Color::blue);
 #endif
                     return false;
                 }
@@ -718,10 +720,44 @@ Polyhedron_3 TraversabilityGenerator3d::createPolyhedronFromSurfacePatch(const S
     // Extract the normal and center of the surface patch
     Eigen::Vector3f normalf = p->getNormal();  // Normal vector of the plane
     Eigen::Vector3d normal{normalf.x(), normalf.y(), normalf.z()};
+    normal.normalize();
 
-    Polyhedron_3 patch = patchPolyhedron;
-    Transformation transform = generateTransform(normal, position);
-    transformPolyhedron(patch,transform);
+    // Dynamically calculate the patch height/thickness from MLS patch bounds,
+    // ensuring a minimum height of 0.02m to avoid degenerate flat polyhedrons.
+    double currentPatchHeight = std::max(0.02, (double)(p->getTop() - p->getBottom()));
+
+    double patchHalfLength = config.gridResolution / 2.0;
+    double patchHalfWidth = config.gridResolution / 2.0;
+    double patchHalfHeight = currentPatchHeight / 2.0;
+
+    std::vector<Eigen::Vector3d> dynamicPatchEdges = {
+        {patchHalfLength, patchHalfWidth, patchHalfHeight},    // Top-right-front
+        {patchHalfLength, patchHalfWidth, -patchHalfHeight},   // Top-right-back
+        {patchHalfLength, -patchHalfWidth, patchHalfHeight},   // Bottom-right-front
+        {patchHalfLength, -patchHalfWidth, -patchHalfHeight},  // Bottom-right-back
+        {-patchHalfLength, patchHalfWidth, patchHalfHeight},   // Top-left-front
+        {-patchHalfLength, patchHalfWidth, -patchHalfHeight},  // Top-left-back
+        {-patchHalfLength, -patchHalfWidth, patchHalfHeight},  // Bottom-left-front
+        {-patchHalfLength, -patchHalfWidth, -patchHalfHeight}  // Bottom-left-back
+    };
+
+    Polyhedron_3 patch;
+    // If the patch normal is close to vertical (ground/slope), rotate to match the slope.
+    // Otherwise, for near-vertical wall patches (horizontal normal), keep the column vertical (no rotation).
+    if (std::abs(normal.z()) > 0.707)
+    {
+        patch = generatePolyhedron(dynamicPatchEdges);
+        Transformation transform = generateTransform(normal, position);
+        transformPolyhedron(patch, transform);
+    }
+    else
+    {
+        for (auto& pt : dynamicPatchEdges)
+        {
+            pt += position;
+        }
+        patch = generatePolyhedron(dynamicPatchEdges);
+    }
     return patch;
 }
 
