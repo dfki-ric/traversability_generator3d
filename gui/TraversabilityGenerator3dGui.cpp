@@ -242,7 +242,7 @@ void TraversabilityGenerator3dGui::loadMls(const std::string& path)
             LOG_INFO_S << "NUM CELLS: " << numCells.transpose();
 
             maps::grid::MLSConfig cfg;
-            cfg.gapSize = 0.1;
+            cfg.gapSize = 0.5;
             const maps::grid::Vector2d mapSize(numCells[0]*mls_res, numCells[1]*mls_res);
             const maps::grid::Vector3d offset(mi.x-0.5*mls_res, mi.y-0.5*mls_res, 0);
 

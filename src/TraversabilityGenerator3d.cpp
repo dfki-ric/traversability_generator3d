@@ -581,22 +581,37 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
     }
     nodePos.z() += node->getHeight();
 
-    Eigen::Vector3d robotCenterPos = nodePos;
-    robotCenterPos.z() += config.maxStepHeight + config.robotHeight/2;
-
-    Transformation transform = generateTransform(node->getUserData().plane.normal(), robotCenterPos);
-    Polyhedron_3 robot = robotPolyhedron;
-    transformPolyhedron(robot,transform);
-
-    Eigen::Matrix3d rotation_matrix;
-    for (int i = 0; i < 3; ++i) {
-        for (int j = 0; j < 3; ++j) {
-            rotation_matrix(i, j) = transform.m(i, j); // Access rotation part of the matrix
-        }
+    // Get 4 corner positions based on local terrain heights
+    std::vector<Eigen::Vector3d> cornerPositions = compute4PointContactPositions(nodePos);
+    
+    if(cornerPositions.size() != 4)
+    {
+        LOG_WARN_S << "compute4PointContactPositions returned " << cornerPositions.size() << " corners instead of 4";
+        return true;
     }
-
-    Eigen::Quaterniond robotOrientation(rotation_matrix);
-    Eigen::Vector3d robotSize{config.robotSizeX, config.robotSizeY, config.robotHeight};
+    
+    // Build robot edges from 4-point contact geometry:
+    // Lower 4 corners (from computed positions) + Upper 4 corners (at lower + height offset)
+    std::vector<Eigen::Vector3d> robotEdges4Point;
+    for(const auto& corner : cornerPositions)
+    {
+        robotEdges4Point.push_back(corner);
+    }
+    
+    // Compute contact plane normal from 4 corners
+    Eigen::Vector3d contactNormal = computeContactPlaneFromCorners(nodePos);
+    
+    // Use contact normal directly for height offset - robot tilts to match terrain slope
+    Eigen::Vector3d heightOffset = contactNormal * config.robotHeight;
+    
+    // Add upper 4 corners (offset from lower corners by robot height along contact normal)
+    for(size_t i = 0; i < 4; i++)
+    {
+        robotEdges4Point.push_back(cornerPositions[i] + heightOffset + Eigen::Vector3d(0,0,config.maxStepHeight));
+    }
+    
+    // Build polyhedron from these 8 corners
+    Polyhedron_3 robot = generatePolyhedron(robotEdges4Point);
 
     const double halfSmall = std::min(config.robotSizeX, config.robotSizeY) / 2.0;
     Eigen::Vector3d min(-halfSmall, -halfSmall, 0);
@@ -654,10 +669,6 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
                 if(CGAL::Polygon_mesh_processing::do_intersect(patch,robot))
                 {
 #ifdef ENABLE_DEBUG_DRAWINGS
-                    V3DD::COMPLEX_DRAWING([&]
-                    {
-                        V3DD::DRAW_WIREFRAME_BOX("traversability_generator3d_trav_obstacle_check_box", robotCenterPos, robotOrientation, robotSize, V3DD::Color::red);
-                    });
                     Eigen::Vector3d patchSize{config.gridResolution, config.gridResolution, patchHeight};
                     Eigen::Vector3f normalf = p->getNormal(); 
                     Eigen::Vector3d normal{normalf.x(), normalf.y(), normalf.z()};
@@ -669,8 +680,37 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
         }
     }
 
+#ifdef ENABLE_DEBUG_DRAWINGS
+    {
+        static int boxCounter = 0;
+        if(boxCounter++ % 50 == 0)
+        {
+            V3DD::COMPLEX_DRAWING([&]
+            {
+                Eigen::Vector4d darkBrown{0.4, 0.25, 0.1, 1.0};
+                std::string prefix = "exact_obb_" + std::to_string(boxCounter);
+                
+                for(size_t i = 0; i < 4; i++)
+                {
+                    Eigen::Vector3d lo = cornerPositions[i];
+                    Eigen::Vector3d hi = cornerPositions[i] + heightOffset;
+                    size_t next = (i + 1) % 4;
+                    Eigen::Vector3d loNext = cornerPositions[next];
+                    Eigen::Vector3d hiNext = cornerPositions[next] + heightOffset;
+                    
+                    // Vertical edge
+                    V3DD::DRAW_LINE(prefix + "_v" + std::to_string(i), lo, hi, darkBrown);
+                    // Lower perimeter edge
+                    V3DD::DRAW_LINE(prefix + "_lo" + std::to_string(i), lo, loNext, darkBrown);
+                    // Upper perimeter edge
+                    V3DD::DRAW_LINE(prefix + "_hi" + std::to_string(i), hi, hiNext, darkBrown);
+                }
+            });
+        }
+    }
+#endif
+
     return true;
-    
 }
 
 Polyhedron_3 TraversabilityGenerator3d::createPolyhedronFromSurfacePatch(const SurfacePatch<MLSConfig::SLOPE> *p, const Eigen::Vector3d& position){
