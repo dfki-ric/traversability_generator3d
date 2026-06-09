@@ -668,13 +668,59 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
                 if(CGAL::Polygon_mesh_processing::do_intersect(patch,robot))
                 {
 #ifdef ENABLE_DEBUG_DRAWINGS
-                    double currentPatchHeight = std::max(0.02, (double)(p->getTop() - p->getBottom()));
-                    Eigen::Vector3d patchSize{config.gridResolution, config.gridResolution, currentPatchHeight};
                     Eigen::Vector3f normalf = p->getNormal(); 
                     Eigen::Vector3d normal{normalf.x(), normalf.y(), normalf.z()};
                     normal.normalize();
-                    Eigen::Vector3d drawNormal = (std::abs(normal.z()) > 0.707) ? normal : Eigen::Vector3d::UnitZ();
-                    drawWireFrameBox(drawNormal,pos,patchSize,V3DD::Color::blue);
+
+                    Eigen::Vector3d vecV;
+                    double horizNorm = std::sqrt(normal.x() * normal.x() + normal.y() * normal.y());
+                    if (horizNorm > 1e-5)
+                    {
+                        vecV = Eigen::Vector3d(-normal.y(), normal.x(), 0.0) / horizNorm;
+                    }
+                    else
+                    {
+                        vecV = Eigen::Vector3d(0.0, 1.0, 0.0);
+                    }
+
+                    double halfThickness = 0.01;
+                    double halfWidth = config.gridResolution / 2.0;
+                    double h_val = std::abs(normal.z()) * config.gridResolution + (1.0 - std::abs(normal.z())) * (p->getTop() - p->getBottom());
+                    double halfHeight = std::max(0.02, h_val) / 2.0;
+
+                    Eigen::Vector3d vecThickness = normal * halfThickness;
+                    Eigen::Vector3d vecWidth = vecV * halfWidth;
+                    Eigen::Vector3d vecHeight = normal.cross(vecV) * halfHeight;
+
+                    std::vector<Eigen::Vector3d> corners = {
+                        pos + vecThickness + vecWidth + vecHeight,
+                        pos + vecThickness + vecWidth - vecHeight,
+                        pos + vecThickness - vecWidth + vecHeight,
+                        pos + vecThickness - vecWidth - vecHeight,
+                        pos - vecThickness + vecWidth + vecHeight,
+                        pos - vecThickness + vecWidth - vecHeight,
+                        pos - vecThickness - vecWidth + vecHeight,
+                        pos - vecThickness - vecWidth - vecHeight
+                    };
+
+                    Eigen::Vector4d blue{0.0, 0.0, 1.0, 1.0};
+                    std::string prefix = "traversability_generator3d_mls_patch_box";
+
+                    V3DD::COMPLEX_DRAWING([&]
+                    {
+                        V3DD::DRAW_LINE(prefix + "_v0", corners[1], corners[0], blue);
+                        V3DD::DRAW_LINE(prefix + "_v1", corners[3], corners[2], blue);
+                        V3DD::DRAW_LINE(prefix + "_v2", corners[5], corners[4], blue);
+                        V3DD::DRAW_LINE(prefix + "_v3", corners[7], corners[6], blue);
+                        V3DD::DRAW_LINE(prefix + "_l0", corners[1], corners[3], blue);
+                        V3DD::DRAW_LINE(prefix + "_l1", corners[3], corners[7], blue);
+                        V3DD::DRAW_LINE(prefix + "_l2", corners[7], corners[5], blue);
+                        V3DD::DRAW_LINE(prefix + "_l3", corners[5], corners[1], blue);
+                        V3DD::DRAW_LINE(prefix + "_u0", corners[0], corners[2], blue);
+                        V3DD::DRAW_LINE(prefix + "_u1", corners[2], corners[6], blue);
+                        V3DD::DRAW_LINE(prefix + "_u2", corners[6], corners[4], blue);
+                        V3DD::DRAW_LINE(prefix + "_u3", corners[4], corners[0], blue);
+                    });
 #endif
                     return false;
                 }
