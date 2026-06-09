@@ -24,6 +24,7 @@ class QPushButton;
 class QDoubleSpinBox;
 class QComboBox;
 class QLabel;
+class QCheckBox;
 
 namespace vizkit3d {
     class Vizkit3DWidget;
@@ -46,6 +47,7 @@ public slots:
     void expandAll();
     void resetTravMap();
     void onYawChanged(double deg);
+    void updateConfigFromUI();
 
 private:
     void loadMls(const std::string& path);
@@ -81,5 +83,26 @@ private:
 
     QDoubleSpinBox* yawSpin_ = nullptr;
     osg::ref_ptr<osg::MatrixTransform> robotBoxTransform_;
+
+    QDoubleSpinBox* gridResolutionSpin = nullptr;
+    QDoubleSpinBox* robotHeightSpin = nullptr;
+    QDoubleSpinBox* robotSizeXSpin = nullptr;
+    QDoubleSpinBox* robotSizeYSpin = nullptr;
+    QDoubleSpinBox* distToGroundSpin = nullptr;
+    QDoubleSpinBox* maxSlopeSpin = nullptr;
+    QDoubleSpinBox* maxStepHeightSpin = nullptr;
+    QDoubleSpinBox* inclineLimittingMinSlopeSpin = nullptr;
+    QDoubleSpinBox* inclineLimittingLimitSpin = nullptr;
+    QComboBox* slopeMetricCombo = nullptr;
+    QDoubleSpinBox* costFunctionDistSpin = nullptr;
+    QDoubleSpinBox* minTraversablePercentageSpin = nullptr;
+    QCheckBox* allowForwardDownhillCheck = nullptr;
+    QCheckBox* enableInclineLimittingCheck = nullptr;
+    QCheckBox* useSoilInformationCheck = nullptr;
+    QCheckBox* traverseSandCheck = nullptr;
+    QCheckBox* traverseRocksCheck = nullptr;
+    QCheckBox* traverseGravelCheck = nullptr;
+    QCheckBox* traverseConcreteCheck = nullptr;
+    QDoubleSpinBox* obstacleInflationMultiplierSpin = nullptr;
 
 };

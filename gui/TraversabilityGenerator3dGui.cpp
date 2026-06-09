@@ -6,6 +6,8 @@
 #include <QDoubleSpinBox>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QCheckBox>
+#include <QGridLayout>
 #include <vizkit3d/Vizkit3DWidget.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/archive/binary_iarchive.hpp>
@@ -113,6 +115,112 @@ void TraversabilityGenerator3dGui::setupUI()
     yawLayout->addStretch();
     layout->addLayout(yawLayout);
 
+    // --- Config Parameters panel ---
+    QGridLayout* paramLayout = new QGridLayout();
+
+    paramLayout->addWidget(new QLabel("Grid Res:"), 0, 0);
+    gridResolutionSpin = new QDoubleSpinBox();
+    gridResolutionSpin->setRange(0.05, 10.0);
+    gridResolutionSpin->setSingleStep(0.05);
+    paramLayout->addWidget(gridResolutionSpin, 0, 1);
+
+    paramLayout->addWidget(new QLabel("Robot Height:"), 0, 2);
+    robotHeightSpin = new QDoubleSpinBox();
+    robotHeightSpin->setRange(0.1, 10.0);
+    robotHeightSpin->setSingleStep(0.05);
+    paramLayout->addWidget(robotHeightSpin, 0, 3);
+
+    paramLayout->addWidget(new QLabel("Robot Size X:"), 0, 4);
+    robotSizeXSpin = new QDoubleSpinBox();
+    robotSizeXSpin->setRange(0.1, 20.0);
+    robotSizeXSpin->setSingleStep(0.1);
+    paramLayout->addWidget(robotSizeXSpin, 0, 5);
+
+    paramLayout->addWidget(new QLabel("Robot Size Y:"), 0, 6);
+    robotSizeYSpin = new QDoubleSpinBox();
+    robotSizeYSpin->setRange(0.1, 20.0);
+    robotSizeYSpin->setSingleStep(0.1);
+    paramLayout->addWidget(robotSizeYSpin, 0, 7);
+
+    paramLayout->addWidget(new QLabel("Max Step Height:"), 1, 0);
+    maxStepHeightSpin = new QDoubleSpinBox();
+    maxStepHeightSpin->setRange(0.0, 5.0);
+    maxStepHeightSpin->setSingleStep(0.05);
+    paramLayout->addWidget(maxStepHeightSpin, 1, 1);
+
+    paramLayout->addWidget(new QLabel("Max Slope [rad]:"), 1, 2);
+    maxSlopeSpin = new QDoubleSpinBox();
+    maxSlopeSpin->setRange(0.0, 1.57);
+    maxSlopeSpin->setSingleStep(0.05);
+    paramLayout->addWidget(maxSlopeSpin, 1, 3);
+
+    paramLayout->addWidget(new QLabel("Obstacle Infl Mult:"), 1, 4);
+    obstacleInflationMultiplierSpin = new QDoubleSpinBox();
+    obstacleInflationMultiplierSpin->setRange(1.0, 10.0);
+    obstacleInflationMultiplierSpin->setSingleStep(0.1);
+    paramLayout->addWidget(obstacleInflationMultiplierSpin, 1, 5);
+
+    paramLayout->addWidget(new QLabel("Dist to Ground:"), 1, 6);
+    distToGroundSpin = new QDoubleSpinBox();
+    distToGroundSpin->setRange(-5.0, 5.0);
+    distToGroundSpin->setSingleStep(0.05);
+    paramLayout->addWidget(distToGroundSpin, 1, 7);
+
+    paramLayout->addWidget(new QLabel("Inc Lim Min Slope:"), 2, 0);
+    inclineLimittingMinSlopeSpin = new QDoubleSpinBox();
+    inclineLimittingMinSlopeSpin->setRange(0.0, 1.57);
+    inclineLimittingMinSlopeSpin->setSingleStep(0.05);
+    paramLayout->addWidget(inclineLimittingMinSlopeSpin, 2, 1);
+
+    paramLayout->addWidget(new QLabel("Inc Lim Limit:"), 2, 2);
+    inclineLimittingLimitSpin = new QDoubleSpinBox();
+    inclineLimittingLimitSpin->setRange(0.0, 1.57);
+    inclineLimittingLimitSpin->setSingleStep(0.05);
+    paramLayout->addWidget(inclineLimittingLimitSpin, 2, 3);
+
+    paramLayout->addWidget(new QLabel("Cost Func Dist:"), 2, 4);
+    costFunctionDistSpin = new QDoubleSpinBox();
+    costFunctionDistSpin->setRange(0.0, 50.0);
+    costFunctionDistSpin->setSingleStep(0.5);
+    paramLayout->addWidget(costFunctionDistSpin, 2, 5);
+
+    paramLayout->addWidget(new QLabel("Min Trav %:"), 2, 6);
+    minTraversablePercentageSpin = new QDoubleSpinBox();
+    minTraversablePercentageSpin->setRange(0.0, 1.0);
+    minTraversablePercentageSpin->setSingleStep(0.05);
+    paramLayout->addWidget(minTraversablePercentageSpin, 2, 7);
+
+    paramLayout->addWidget(new QLabel("Slope Metric:"), 3, 0);
+    slopeMetricCombo = new QComboBox();
+    slopeMetricCombo->addItem("NONE");
+    slopeMetricCombo->addItem("AVG_SLOPE");
+    slopeMetricCombo->addItem("MAX_SLOPE");
+    slopeMetricCombo->addItem("TRIANGLE_SLOPE");
+    paramLayout->addWidget(slopeMetricCombo, 3, 1);
+
+    allowForwardDownhillCheck = new QCheckBox("Allow Forward Downhill");
+    paramLayout->addWidget(allowForwardDownhillCheck, 3, 2, 1, 2);
+
+    enableInclineLimittingCheck = new QCheckBox("Enable Incline Limiting");
+    paramLayout->addWidget(enableInclineLimittingCheck, 3, 4, 1, 2);
+
+    useSoilInformationCheck = new QCheckBox("Use Soil Info");
+    paramLayout->addWidget(useSoilInformationCheck, 3, 6, 1, 2);
+
+    traverseSandCheck = new QCheckBox("Traverse Sand");
+    paramLayout->addWidget(traverseSandCheck, 4, 0, 1, 2);
+
+    traverseRocksCheck = new QCheckBox("Traverse Rocks");
+    paramLayout->addWidget(traverseRocksCheck, 4, 2, 1, 2);
+
+    traverseGravelCheck = new QCheckBox("Traverse Gravel");
+    paramLayout->addWidget(traverseGravelCheck, 4, 4, 1, 2);
+
+    traverseConcreteCheck = new QCheckBox("Traverse Concrete");
+    paramLayout->addWidget(traverseConcreteCheck, 4, 6, 1, 2);
+
+    layout->addLayout(paramLayout);
+
     resetButton = new QPushButton("Reset Traversability and Soil Maps");
     resetButton->setEnabled(false);
     layout->addWidget(resetButton);
@@ -128,6 +236,27 @@ void TraversabilityGenerator3dGui::setupUI()
             this, SLOT(picked(float,float,float,int,int)));
     connect(resetButton, SIGNAL(clicked(bool)), this, SLOT(resetTravMap()));
     connect(yawSpin_, SIGNAL(valueChanged(double)), this, SLOT(onYawChanged(double)));
+
+    connect(gridResolutionSpin, SIGNAL(valueChanged(double)), this, SLOT(updateConfigFromUI()));
+    connect(robotHeightSpin, SIGNAL(valueChanged(double)), this, SLOT(updateConfigFromUI()));
+    connect(robotSizeXSpin, SIGNAL(valueChanged(double)), this, SLOT(updateConfigFromUI()));
+    connect(robotSizeYSpin, SIGNAL(valueChanged(double)), this, SLOT(updateConfigFromUI()));
+    connect(distToGroundSpin, SIGNAL(valueChanged(double)), this, SLOT(updateConfigFromUI()));
+    connect(maxSlopeSpin, SIGNAL(valueChanged(double)), this, SLOT(updateConfigFromUI()));
+    connect(maxStepHeightSpin, SIGNAL(valueChanged(double)), this, SLOT(updateConfigFromUI()));
+    connect(inclineLimittingMinSlopeSpin, SIGNAL(valueChanged(double)), this, SLOT(updateConfigFromUI()));
+    connect(inclineLimittingLimitSpin, SIGNAL(valueChanged(double)), this, SLOT(updateConfigFromUI()));
+    connect(costFunctionDistSpin, SIGNAL(valueChanged(double)), this, SLOT(updateConfigFromUI()));
+    connect(minTraversablePercentageSpin, SIGNAL(valueChanged(double)), this, SLOT(updateConfigFromUI()));
+    connect(obstacleInflationMultiplierSpin, SIGNAL(valueChanged(double)), this, SLOT(updateConfigFromUI()));
+    connect(slopeMetricCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(updateConfigFromUI()));
+    connect(allowForwardDownhillCheck, SIGNAL(toggled(bool)), this, SLOT(updateConfigFromUI()));
+    connect(enableInclineLimittingCheck, SIGNAL(toggled(bool)), this, SLOT(updateConfigFromUI()));
+    connect(useSoilInformationCheck, SIGNAL(toggled(bool)), this, SLOT(updateConfigFromUI()));
+    connect(traverseSandCheck, SIGNAL(toggled(bool)), this, SLOT(updateConfigFromUI()));
+    connect(traverseRocksCheck, SIGNAL(toggled(bool)), this, SLOT(updateConfigFromUI()));
+    connect(traverseGravelCheck, SIGNAL(toggled(bool)), this, SLOT(updateConfigFromUI()));
+    connect(traverseConcreteCheck, SIGNAL(toggled(bool)), this, SLOT(updateConfigFromUI()));
 }
 
 void TraversabilityGenerator3dGui::loadTravConfigFromYaml(const std::string& file)
@@ -170,6 +299,90 @@ void TraversabilityGenerator3dGui::loadTravConfigFromYaml(const std::string& fil
     else if(s == "MAX_SLOPE")      travConfig.slopeMetric = traversability_generator3d::MAX_SLOPE;
     else if(s == "TRIANGLE_SLOPE") travConfig.slopeMetric = traversability_generator3d::TRIANGLE_SLOPE;
     else                            travConfig.slopeMetric = traversability_generator3d::NONE;
+
+    // Update GUI widgets with loaded values
+    gridResolutionSpin->blockSignals(true);
+    gridResolutionSpin->setValue(travConfig.gridResolution);
+    gridResolutionSpin->blockSignals(false);
+
+    robotHeightSpin->blockSignals(true);
+    robotHeightSpin->setValue(travConfig.robotHeight);
+    robotHeightSpin->blockSignals(false);
+
+    robotSizeXSpin->blockSignals(true);
+    robotSizeXSpin->setValue(travConfig.robotSizeX);
+    robotSizeXSpin->blockSignals(false);
+
+    robotSizeYSpin->blockSignals(true);
+    robotSizeYSpin->setValue(travConfig.robotSizeY);
+    robotSizeYSpin->blockSignals(false);
+
+    distToGroundSpin->blockSignals(true);
+    distToGroundSpin->setValue(travConfig.distToGround);
+    distToGroundSpin->blockSignals(false);
+
+    maxSlopeSpin->blockSignals(true);
+    maxSlopeSpin->setValue(travConfig.maxSlope);
+    maxSlopeSpin->blockSignals(false);
+
+    maxStepHeightSpin->blockSignals(true);
+    maxStepHeightSpin->setValue(travConfig.maxStepHeight);
+    maxStepHeightSpin->blockSignals(false);
+
+    inclineLimittingMinSlopeSpin->blockSignals(true);
+    inclineLimittingMinSlopeSpin->setValue(travConfig.inclineLimittingMinSlope);
+    inclineLimittingMinSlopeSpin->blockSignals(false);
+
+    inclineLimittingLimitSpin->blockSignals(true);
+    inclineLimittingLimitSpin->setValue(travConfig.inclineLimittingLimit);
+    inclineLimittingLimitSpin->blockSignals(false);
+
+    costFunctionDistSpin->blockSignals(true);
+    costFunctionDistSpin->setValue(travConfig.costFunctionDist);
+    costFunctionDistSpin->blockSignals(false);
+
+    minTraversablePercentageSpin->blockSignals(true);
+    minTraversablePercentageSpin->setValue(travConfig.minTraversablePercentage);
+    minTraversablePercentageSpin->blockSignals(false);
+
+    obstacleInflationMultiplierSpin->blockSignals(true);
+    obstacleInflationMultiplierSpin->setValue(travConfig.obstacleInflationMultiplier);
+    obstacleInflationMultiplierSpin->blockSignals(false);
+
+    slopeMetricCombo->blockSignals(true);
+    if      (travConfig.slopeMetric == traversability_generator3d::AVG_SLOPE)      slopeMetricCombo->setCurrentText("AVG_SLOPE");
+    else if (travConfig.slopeMetric == traversability_generator3d::MAX_SLOPE)      slopeMetricCombo->setCurrentText("MAX_SLOPE");
+    else if (travConfig.slopeMetric == traversability_generator3d::TRIANGLE_SLOPE) slopeMetricCombo->setCurrentText("TRIANGLE_SLOPE");
+    else                                                                           slopeMetricCombo->setCurrentText("NONE");
+    slopeMetricCombo->blockSignals(false);
+
+    allowForwardDownhillCheck->blockSignals(true);
+    allowForwardDownhillCheck->setChecked(travConfig.allowForwardDownhill);
+    allowForwardDownhillCheck->blockSignals(false);
+
+    enableInclineLimittingCheck->blockSignals(true);
+    enableInclineLimittingCheck->setChecked(travConfig.enableInclineLimitting);
+    enableInclineLimittingCheck->blockSignals(false);
+
+    useSoilInformationCheck->blockSignals(true);
+    useSoilInformationCheck->setChecked(travConfig.useSoilInformation);
+    useSoilInformationCheck->blockSignals(false);
+
+    traverseSandCheck->blockSignals(true);
+    traverseSandCheck->setChecked(travConfig.traverseSand);
+    traverseSandCheck->blockSignals(false);
+
+    traverseRocksCheck->blockSignals(true);
+    traverseRocksCheck->setChecked(travConfig.traverseRocks);
+    traverseRocksCheck->blockSignals(false);
+
+    traverseGravelCheck->blockSignals(true);
+    traverseGravelCheck->setChecked(travConfig.traverseGravel);
+    traverseGravelCheck->blockSignals(false);
+
+    traverseConcreteCheck->blockSignals(true);
+    traverseConcreteCheck->setChecked(travConfig.traverseConcrete);
+    traverseConcreteCheck->blockSignals(false);
 }
 
 static traversability_generator3d::SoilType soilTypeFromString(const std::string& s)
@@ -454,3 +667,53 @@ void TraversabilityGenerator3dGui::onYawChanged(double /*deg*/)
 {
     updateRobotBoxTransform();
 }
+
+void TraversabilityGenerator3dGui::updateConfigFromUI()
+{
+    // doubles
+    travConfig.gridResolution           = gridResolutionSpin->value();
+    travConfig.robotHeight              = robotHeightSpin->value();
+    travConfig.robotSizeX               = robotSizeXSpin->value();
+    travConfig.robotSizeY               = robotSizeYSpin->value();
+    travConfig.distToGround             = distToGroundSpin->value();
+    travConfig.maxSlope                 = maxSlopeSpin->value();
+    travConfig.maxStepHeight            = maxStepHeightSpin->value();
+    travConfig.inclineLimittingMinSlope = inclineLimittingMinSlopeSpin->value();
+    travConfig.inclineLimittingLimit    = inclineLimittingLimitSpin->value();
+    travConfig.costFunctionDist         = costFunctionDistSpin->value();
+    travConfig.minTraversablePercentage = minTraversablePercentageSpin->value();
+    travConfig.obstacleInflationMultiplier = obstacleInflationMultiplierSpin->value();
+
+    // booleans
+    travConfig.allowForwardDownhill     = allowForwardDownhillCheck->isChecked();
+    travConfig.enableInclineLimitting   = enableInclineLimittingCheck->isChecked();
+    travConfig.useSoilInformation       = useSoilInformationCheck->isChecked();
+    travConfig.traverseSand             = traverseSandCheck->isChecked();
+    travConfig.traverseRocks            = traverseRocksCheck->isChecked();
+    travConfig.traverseGravel           = traverseGravelCheck->isChecked();
+    travConfig.traverseConcrete         = traverseConcreteCheck->isChecked();
+
+    // enum
+    std::string s = slopeMetricCombo->currentText().toStdString();
+    if      (s == "AVG_SLOPE")      travConfig.slopeMetric = traversability_generator3d::AVG_SLOPE;
+    else if (s == "MAX_SLOPE")      travConfig.slopeMetric = traversability_generator3d::MAX_SLOPE;
+    else if (s == "TRIANGLE_SLOPE") travConfig.slopeMetric = traversability_generator3d::TRIANGLE_SLOPE;
+    else                            travConfig.slopeMetric = traversability_generator3d::NONE;
+
+    if (travGen)
+    {
+        travGen->setConfig(travConfig);
+    }
+
+    if (robotBoxTransform_ && widget && widget->getRootNode())
+    {
+        widget->getRootNode()->removeChild(robotBoxTransform_);
+        robotBoxTransform_ = nullptr;
+    }
+    setupRobotBoxViz();
+    if (startPicked)
+    {
+        updateRobotBoxTransform();
+    }
+}
+
