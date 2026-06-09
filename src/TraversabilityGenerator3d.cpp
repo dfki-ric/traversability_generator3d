@@ -362,6 +362,84 @@ Eigen::Vector3d TraversabilityGenerator3d::computeSlopeDirection(const Eigen::Hy
     return projection;
 }
 
+double TraversabilityGenerator3d::sampleTerrainHeightAtCorner(const Eigen::Vector3d& nodePos, double cornerX, double cornerY) const
+{
+    Eigen::Vector3d cornerPos = nodePos;
+    cornerPos.x() += cornerX;
+    cornerPos.y() += cornerY;
+
+    const double searchRadius = config.gridResolution;
+    const double robotDiagHalf = std::sqrt(config.robotSizeX * config.robotSizeX +
+                                           config.robotSizeY * config.robotSizeY) / 2.0;
+    const double vertSearchRange = robotDiagHalf * std::sin(config.maxSlope) + config.maxStepHeight;
+    Eigen::Vector3d searchMin = cornerPos - Eigen::Vector3d(searchRadius, searchRadius, vertSearchRange);
+    Eigen::Vector3d searchMax = cornerPos + Eigen::Vector3d(searchRadius, searchRadius, vertSearchRange);
+
+    View area = mlsGrid->intersectCuboid(Eigen::AlignedBox3d(searchMin, searchMax));
+
+    double bestHeight = nodePos.z() - vertSearchRange;
+    for(size_t y = 0; y < area.getNumCells().y(); y++)
+    {
+        for(size_t x = 0; x < area.getNumCells().x(); x++)
+        {
+            for(const SurfacePatch<MLSConfig::SLOPE> *p : area.at(x, y))
+            {
+                double h = (p->getTop() + p->getBottom()) / 2.0;
+                if(std::abs(h - nodePos.z()) <= vertSearchRange && h > bestHeight)
+                    bestHeight = h;
+            }
+        }
+    }
+    return bestHeight;
+}
+
+Eigen::Vector3d TraversabilityGenerator3d::computeContactPlaneFromCorners(const Eigen::Vector3d& nodePos)
+{
+    // Sample terrain heights at 4 corners via shared helper
+    const double hx = config.robotSizeX / 2.0;
+    const double hy = config.robotSizeY / 2.0;
+    std::vector<Eigen::Vector3d> cornerPositions = {
+        {nodePos.x() + hx, nodePos.y() + hy, sampleTerrainHeightAtCorner(nodePos,  hx,  hy)},
+        {nodePos.x() + hx, nodePos.y() - hy, sampleTerrainHeightAtCorner(nodePos,  hx, -hy)},
+        {nodePos.x() - hx, nodePos.y() + hy, sampleTerrainHeightAtCorner(nodePos, -hx,  hy)},
+        {nodePos.x() - hx, nodePos.y() - hy, sampleTerrainHeightAtCorner(nodePos, -hx, -hy)},
+    };
+    
+    // Fit plane through 4 corner points using PCA
+    Eigen::Vector3d centroid = Eigen::Vector3d::Zero();
+    for(const auto& p : cornerPositions)
+        centroid += p;
+    centroid /= 4.0;
+
+    Eigen::Matrix3d cov = Eigen::Matrix3d::Zero();
+    for(const auto& p : cornerPositions)
+    {
+        Eigen::Vector3d centered = p - centroid;
+        cov += centered * centered.transpose();
+    }
+    cov /= 4.0;
+
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> solver(cov);
+    Eigen::Vector3d normal = solver.eigenvectors().col(0); // smallest eigenvalue = plane normal
+    normal.normalize();
+    if(normal.z() < 0)
+        normal = -normal;
+    return normal;
+}
+
+std::vector<Eigen::Vector3d> TraversabilityGenerator3d::compute4PointContactPositions(const Eigen::Vector3d& nodePos)
+{
+    // Returns 4 lower OBB corners in perimeter order: +X+Y, +X-Y, -X-Y, -X+Y
+    // Each at terrain height + maxStepHeight (bottom of robot body)
+    const double hx = config.robotSizeX / 2.0;
+    const double hy = config.robotSizeY / 2.0;
+    return {
+        {nodePos.x() + hx, nodePos.y() + hy, sampleTerrainHeightAtCorner(nodePos,  hx,  hy) + config.maxStepHeight},
+        {nodePos.x() + hx, nodePos.y() - hy, sampleTerrainHeightAtCorner(nodePos,  hx, -hy) + config.maxStepHeight},
+        {nodePos.x() - hx, nodePos.y() - hy, sampleTerrainHeightAtCorner(nodePos, -hx, -hy) + config.maxStepHeight},
+        {nodePos.x() - hx, nodePos.y() + hy, sampleTerrainHeightAtCorner(nodePos, -hx,  hy) + config.maxStepHeight},
+    };
+}
 
 bool TraversabilityGenerator3d::checkForFrontier(const TravGenNode* node)
 {

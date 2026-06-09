@@ -61,6 +61,7 @@ protected:
     Transformation generateTransform(const Eigen::Vector3d& normal, const Eigen::Vector3d& translation);
     Polyhedron_3 createPolyhedronFromSurfacePatch(const maps::grid::SurfacePatch<maps::grid::MLSConfig::SLOPE> *p, const Eigen::Vector3d& position);
     void drawWireFrameBox(const Eigen::Vector3d& normal, const Eigen::Vector3d& position, const Eigen::Vector3d& size, const Eigen::Vector4d& colorRGBA);
+    double sampleTerrainHeightAtCorner(const Eigen::Vector3d& nodePos, double cornerX, double cornerY) const;
     std::shared_ptr<MLGrid > mlsGrid;
     bool addInitialPatch;
     Eigen::Affine3d initialPatch2Mls;
@@ -77,6 +78,8 @@ protected:
     std::vector<TravGenNode *> frontierNodesGrowList;
     
     bool computePlaneRansac(TravGenNode &node);
+    Eigen::Vector3d computeContactPlaneFromCorners(const Eigen::Vector3d& nodePos);
+    std::vector<Eigen::Vector3d> compute4PointContactPositions(const Eigen::Vector3d& nodePos);
     double computeSlope(const Eigen::Hyperplane< double, int(3) >& plane) const;
     Eigen::Vector3d computeSlopeDirection(const Eigen::Hyperplane< double, int(3) >& plane) const;
     
