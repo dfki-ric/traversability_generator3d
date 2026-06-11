@@ -1018,6 +1018,40 @@ void TraversabilityGenerator3d::expandAll(TravGenNode* startNode, const double e
     inflateFrontiers();
     inflateObstacles();
 
+#ifdef ENABLE_DEBUG_DRAWINGS
+    V3DD::CLEAR_DRAWING("partially_traversable_arrows");
+    for (LevelList<TravGenNode*> &l : trMap)
+    {
+        for (TravGenNode *node : l)
+        {
+            if (node->getUserData().nodeType == NodeType::PARTIALLY_TRAVERSABLE)
+            {
+                Eigen::Vector3d nodePos;
+                trMap.fromGrid(node->getIndex(), nodePos, node->getHeight());
+                nodePos.z() += 0.05; // Slightly offset upward for visibility
+
+                const auto& allowed = node->getUserData().allowedOrientations;
+                for (const auto& segment : allowed)
+                {
+                    // Arrow points in the middle of the allowed yaw segment
+                    double yaw = segment.startRad + segment.width / 2.0;
+                    Eigen::Vector3d targetDir(std::cos(yaw), std::sin(yaw), 0.0);
+                    targetDir.normalize();
+
+                    double arrowLength = config.gridResolution * 1.1;
+                    Eigen::Vector3d tipPos = nodePos + targetDir * (arrowLength / 2.0);
+                    // DRAW_ARROW identity points in z-direction, so rotate z->targetDir
+                    Eigen::Quaterniond arrowOrientation = Eigen::Quaterniond::FromTwoVectors(Eigen::Vector3d::UnitZ(), targetDir);
+                    Eigen::Vector3d arrowSize(0.6, 0.6, arrowLength);
+                    Eigen::Vector4d arrowColor(1.0, 0.0, 0.0, 1.0); // Red
+
+                    V3DD::DRAW_ARROW("partially_traversable_arrows", tipPos, arrowOrientation, arrowSize, arrowColor);
+                }
+            }
+        }
+    }
+#endif
+
     LOG_DEBUG_S << "TraversabilityGenerator3d: Expanded " << cnd << " traversability nodes.";
 }
 
