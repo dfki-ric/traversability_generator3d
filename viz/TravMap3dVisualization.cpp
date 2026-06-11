@@ -120,6 +120,11 @@ void TravMap3dVisualization::visualizeNode(const TravGenNode* node)
         eColor = Eigen::Vector4d(1,1,0,1);
     }
 
+    else if (nodeData.nodeType == 8) {
+        // PARTIALLY_TRAVERSABLE: yellow-green to distinguish from full traversable (green)
+        eColor = Eigen::Vector4d(0.6, 0.8, 0.0, 1);
+    }
+
     else {
         eColor = Eigen::Vector4d(0,0,0,1);
     }

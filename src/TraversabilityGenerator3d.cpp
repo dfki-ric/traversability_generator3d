@@ -807,6 +807,100 @@ Polyhedron_3 TraversabilityGenerator3d::createPolyhedronFromSurfacePatch(const S
     return patch;
 }
 
+bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double yaw)
+{
+    /** Check if the robot, rotated to a specific yaw angle, would collide
+     *  with MLS patches at the given node position.
+     *  @return true if the yaw is collision-free (safe).
+     */
+
+    Eigen::Vector3d nodePos;
+    if (!trMap.fromGrid(node->getIndex(), nodePos)) {
+        return false;
+    }
+    nodePos.z() += node->getHeight();
+
+    const double hx = config.robotSizeX / 2.0;
+    const double hy = config.robotSizeY / 2.0;
+
+    // Build yaw rotation
+    Eigen::AngleAxisd yawRotation(yaw, Eigen::Vector3d::UnitZ());
+
+    // Compute 4 lower corners of robot OBB, rotated by yaw
+    std::vector<Eigen::Vector3d> robotCorners;
+    std::vector<Eigen::Vector3d> localCorners = {
+        { hx,  hy, 0.0},
+        { hx, -hy, 0.0},
+        {-hx, -hy, 0.0},
+        {-hx,  hy, 0.0},
+    };
+
+    for (const auto& lc : localCorners)
+    {
+        Eigen::Vector3d rotated = yawRotation * lc;
+        // Sample terrain height at the rotated corner position
+        double terrainH = sampleTerrainHeightAtCorner(nodePos, rotated.x(), rotated.y());
+        robotCorners.push_back({nodePos.x() + rotated.x(),
+                                nodePos.y() + rotated.y(),
+                                terrainH + config.maxStepHeight});
+    }
+
+    // Compute contact normal from the corners
+    Eigen::Vector3d contactNormal = computeContactPlaneFromCorners(nodePos);
+    Eigen::Vector3d heightOffset = contactNormal * config.robotHeight;
+
+    // Add upper 4 corners
+    std::vector<Eigen::Vector3d> robotEdges8;
+    for (const auto& c : robotCorners)
+        robotEdges8.push_back(c);
+    for (const auto& c : robotCorners)
+        robotEdges8.push_back(c + heightOffset);
+
+    Polyhedron_3 robot = generatePolyhedron(robotEdges8);
+
+    // Search area: use half-diagonal as search radius (covers all rotations)
+    const double halfDiag = std::sqrt(hx * hx + hy * hy);
+    Eigen::Vector3d searchMin(-halfDiag, -halfDiag, 0);
+    Eigen::Vector3d searchMax( halfDiag,  halfDiag, config.robotHeight);
+    searchMin += nodePos;
+    searchMax += nodePos;
+
+    const Eigen::AlignedBox3d limitBox(searchMin, searchMax);
+    View area = mlsGrid->intersectCuboid(limitBox);
+
+    Index minIdx, maxIdx;
+    if (!mlsGrid->toGrid(limitBox.min(), minIdx) || !mlsGrid->toGrid(limitBox.max(), maxIdx))
+        return false;
+
+    if (area.getNumCells().y() <= 0 || area.getNumCells().x() <= 0)
+        return true;
+
+    Index curIndex = minIdx;
+    for (size_t y = 0; y < area.getNumCells().y() - 1; y++, curIndex.y() += 1)
+    {
+        curIndex.x() = minIdx.x();
+        for (size_t x = 0; x < area.getNumCells().x() - 1; x++, curIndex.x() += 1)
+        {
+            Eigen::Vector3d pos;
+            if (!mlsGrid->fromGrid(curIndex, pos))
+                continue;
+
+            for (const SurfacePatch<MLSConfig::SLOPE>* p : area.at(x, y))
+            {
+                pos.z() = (p->getTop() + p->getBottom()) / 2.0;
+
+                Polyhedron_3 patch = createPolyhedronFromSurfacePatch(p, pos);
+                if (CGAL::Polygon_mesh_processing::do_intersect(patch, robot))
+                {
+                    return false; // collision found — this yaw is not safe
+                }
+            }
+        }
+    }
+
+    return true; // no collision — yaw is safe
+}
+
 void TraversabilityGenerator3d::inflateFrontiers()
 {
     const double growRadiusSquared = std::pow(std::sqrt(config.robotSizeX * config.robotSizeX + config.robotSizeY * config.robotSizeY) / 2.0, 2);
@@ -969,6 +1063,10 @@ void TraversabilityGenerator3d::inflateObstacles()
     const double inflRadius = effectiveMultiplier *
         std::max(inflGap, config.gridResolution * 1.1) + 1e-5;
 
+    // Track nodes already evaluated to avoid redundant collision checks
+    // (a node can be reached from multiple obstacle sources)
+    std::unordered_set<TravGenNode*> evaluatedNodes;
+
     for (TravGenNode *n : obstacleNodesGrowList)
     {
         const Index nIdx = n->getIndex();
@@ -993,8 +1091,41 @@ void TraversabilityGenerator3d::inflateObstacles()
                    node->getUserData().nodeType == NodeType::FRONTIER ||
                    node->getUserData().nodeType == NodeType::UNKNOWN)
                 {
-                    neighbor->setType(TraversabilityNodeBase::OBSTACLE);
-                    node->getUserData().nodeType = NodeType::INFLATED_OBSTACLE;
+                    if (evaluatedNodes.insert(node).second)
+                    {
+                        // Test 4 base yaw orientations + their π-offset mirrors = 8 total
+                        std::vector<double> safeYaws;
+                        for (int i = 0; i < 4; ++i)
+                        {
+                            double yaw = i * (M_PI / 4.0);
+                            if (checkCollisionForYaw(node, yaw))
+                            {
+                                safeYaws.push_back(yaw);
+                                safeYaws.push_back(yaw + M_PI);
+                            }
+                        }
+
+                        if (safeYaws.empty())
+                        {
+                            // No safe orientation found — fully blocked
+                            neighbor->setType(TraversabilityNodeBase::OBSTACLE);
+                            node->getUserData().nodeType = NodeType::INFLATED_OBSTACLE;
+                        }
+                        else
+                        {
+                            // Some orientations are safe — partially traversable
+                            neighbor->setType(TraversabilityNodeBase::TRAVERSABLE);
+                            node->getUserData().nodeType = NodeType::PARTIALLY_TRAVERSABLE;
+                            node->getUserData().allowedOrientations.clear();
+                            for (double yaw : safeYaws)
+                            {
+                                // Each safe yaw gets a ±22.5° (π/8) wedge
+                                node->getUserData().allowedOrientations.emplace_back(
+                                    base::Angle::fromRad(yaw - M_PI / 8.0), M_PI / 4.0
+                                );
+                            }
+                        }
+                    }
                 }
                 expandNode = true;
             }

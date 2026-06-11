@@ -25,7 +25,8 @@ enum NodeType
     INFLATED_FRONTIER,
     UNKNOWN,
     HOLE,
-    UNSET
+    UNSET,
+    PARTIALLY_TRAVERSABLE
 };
 
 /**Node struct for TraversabilityMap3d */
@@ -88,6 +89,7 @@ inline std::ostream& operator<<(std::ostream& os, NodeType type)
         case NodeType::UNKNOWN: os << "UNKNOWN"; break;
         case NodeType::HOLE: os << "HOLE"; break;
         case NodeType::UNSET: os << "UNSET"; break;
+        case NodeType::PARTIALLY_TRAVERSABLE: os << "PARTIALLY_TRAVERSABLE"; break;
         default: os << "INVALID_NODE_TYPE"; break;
     }
     return os;

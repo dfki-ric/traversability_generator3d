@@ -86,6 +86,10 @@ protected:
     bool checkStepHeightAABB(TravGenNode* node);
     bool checkStepHeightOBB(TravGenNode* node);
     
+    /** Check if the robot at a specific yaw orientation collides with MLS patches.
+     *  @return true if the yaw is collision-free (safe). */
+    bool checkCollisionForYaw(TravGenNode* node, double yaw);
+    
     /** @return false if no allowed orientation was found (e.g. due to extreme slope)*/
     bool computeAllowedOrientations(TravGenNode* node);
     
