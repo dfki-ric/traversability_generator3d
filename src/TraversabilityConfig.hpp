@@ -33,6 +33,8 @@ public:
         , gridResolution(0.3)
         , initialPatchVariance(0.01 * 0.01)
         , obstacleInflationMultiplier(1.0)
+
+        , partiallyTraversableMultiplier(2.0)
         , allowForwardDownhill(true)
         , enableInclineLimitting(false)
         , useSoilInformation(false)
@@ -96,6 +98,9 @@ public:
      *  Affects how much the obstacles are inflated around the robot footprint.
      *  Default is 0.5 (half the robot diagonal). Higher values = more conservative inflation. */
     double obstacleInflationMultiplier;
+
+    // Cost multiplier for traversing a partially traversable cell.
+    double partiallyTraversableMultiplier;
 
     /**if true the robot is allowed to drive downhill forward, otherwise
      * it has to drive downhill backwards */

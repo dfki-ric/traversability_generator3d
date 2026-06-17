@@ -377,16 +377,63 @@ double TraversabilityGenerator3d::sampleTerrainHeightAtCorner(const Eigen::Vecto
 
     View area = mlsGrid->intersectCuboid(Eigen::AlignedBox3d(searchMin, searchMax));
 
+    Index minIdx;
+    if (!mlsGrid->toGrid(searchMin, minIdx))
+    {
+        Index cornerIdx;
+        if (mlsGrid->toGrid(cornerPos, cornerIdx))
+        {
+            minIdx = Index(cornerIdx.x() - 1, cornerIdx.y() - 1);
+        }
+        else
+        {
+            minIdx = Index(0, 0);
+        }
+    }
+
+    double minDistance2DSq = std::numeric_limits<double>::max();
     double bestHeight = nodePos.z() - vertSearchRange;
+
     for(size_t y = 0; y < area.getNumCells().y(); y++)
     {
         for(size_t x = 0; x < area.getNumCells().x(); x++)
         {
+            Index curIndex = minIdx + Index(x, y);
+            Eigen::Vector3d cellPos;
+            if (!mlsGrid->fromGrid(curIndex, cellPos))
+                continue;
+
+            double dx = cellPos.x() - cornerPos.x();
+            double dy = cellPos.y() - cornerPos.y();
+            double dist2DSq = dx * dx + dy * dy;
+
             for(const SurfacePatch<MLSConfig::SLOPE> *p : area.at(x, y))
             {
+                // Check if it's a valid ground patch (not a wall/steep slope)
+                Eigen::Vector3f normalf = p->getNormal();
+                Eigen::Vector3d normal{normalf.x(), normalf.y(), normalf.z()};
+                normal.normalize();
+                if (std::abs(normal.z()) < std::cos(config.maxSlope))
+                    continue;
+
                 double h = (p->getTop() + p->getBottom()) / 2.0;
-                if(std::abs(h - nodePos.z()) <= vertSearchRange && h > bestHeight)
-                    bestHeight = h;
+                if(std::abs(h - nodePos.z()) <= vertSearchRange)
+                {
+                    // Prioritize closer cells in 2D
+                    if (dist2DSq < minDistance2DSq)
+                    {
+                        minDistance2DSq = dist2DSq;
+                        bestHeight = h;
+                    }
+                    // If they are in the same cell, take the one closer in height to the center nodePos
+                    else if (std::abs(dist2DSq - minDistance2DSq) < 1e-5)
+                    {
+                        if (std::abs(h - nodePos.z()) < std::abs(bestHeight - nodePos.z()))
+                        {
+                            bestHeight = h;
+                        }
+                    }
+                }
             }
         }
     }
@@ -470,10 +517,12 @@ void TraversabilityGenerator3d::drawWireFrameBox(const Eigen::Vector3d& normal, 
 
     Eigen::Quaterniond orientation(rotation_matrix);
 #ifdef ENABLE_DEBUG_DRAWINGS
+    /*
     V3DD::COMPLEX_DRAWING([&]
     {
         V3DD::DRAW_WIREFRAME_BOX("traversability_generator3d_mls_patch_box", position, orientation, size, colorRGBA);
     });
+    */
 #endif
 }
 
@@ -668,6 +717,7 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
                 if(CGAL::Polygon_mesh_processing::do_intersect(patch,robot))
                 {
 #ifdef ENABLE_DEBUG_DRAWINGS
+                    /*
                     Eigen::Vector3f normalf = p->getNormal(); 
                     Eigen::Vector3d normal{normalf.x(), normalf.y(), normalf.z()};
                     normal.normalize();
@@ -721,6 +771,7 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
                         V3DD::DRAW_LINE(prefix + "_u2", corners[6], corners[4], blue);
                         V3DD::DRAW_LINE(prefix + "_u3", corners[4], corners[0], blue);
                     });
+                    */
 #endif
                     return false;
                 }
@@ -729,6 +780,7 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
     }
 
 #ifdef ENABLE_DEBUG_DRAWINGS
+    /*
     {
         static int boxCounter = 0;
         if(boxCounter++ % 50 == 0)
@@ -756,6 +808,7 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
             });
         }
     }
+    */
 #endif
 
     return true;
@@ -840,6 +893,14 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
         Eigen::Vector3d rotated = yawRotation * lc;
         // Sample terrain height at the rotated corner position
         double terrainH = sampleTerrainHeightAtCorner(nodePos, rotated.x(), rotated.y());
+        // If the corner falls off the patches, ignore this yaw
+        const double robotDiagHalf = std::sqrt(hx * hx + hy * hy);
+        const double vertSearchRange = robotDiagHalf * std::sin(config.maxSlope) + config.maxStepHeight;
+        if (terrainH <= nodePos.z() - vertSearchRange + 1e-4)
+        {
+            return false; // Not on patch, reject this yaw
+        }
+
         robotCorners.push_back({nodePos.x() + rotated.x(),
                                 nodePos.y() + rotated.y(),
                                 terrainH + config.maxStepHeight});
@@ -936,6 +997,42 @@ void TraversabilityGenerator3d::inflateFrontiers()
 void TraversabilityGenerator3d::setConfig(const TraversabilityConfig &config)
 {
     this->config = config;
+    trMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
+    soilMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
+
+    double robotHalfLength = config.robotSizeX / 2.0;
+    double robotHalfWidth = config.robotSizeY / 2.0;
+    double robotHalfHeight = config.robotHeight / 2.0;
+
+    robotEdges = {
+        {robotHalfLength, robotHalfWidth, robotHalfHeight},    // Top-right-front
+        {robotHalfLength, robotHalfWidth, -robotHalfHeight},   // Top-right-back
+        {robotHalfLength, -robotHalfWidth, robotHalfHeight},   // Bottom-right-front
+        {robotHalfLength, -robotHalfWidth, -robotHalfHeight},  // Bottom-right-back
+        {-robotHalfLength, robotHalfWidth, robotHalfHeight},   // Top-left-front
+        {-robotHalfLength, robotHalfWidth, -robotHalfHeight},  // Top-left-back
+        {-robotHalfLength, -robotHalfWidth, robotHalfHeight},  // Bottom-left-front
+        {-robotHalfLength, -robotHalfWidth, -robotHalfHeight}  // Bottom-left-back
+    };
+
+    robotPolyhedron = generatePolyhedron(robotEdges);
+
+    double patchHalfLength = config.gridResolution / 2.0;
+    double patchHalfWidth = config.gridResolution / 2.0;
+    double patchHalfHeight = patchHeight / 2.0;
+
+    patchEdges = {
+        {patchHalfLength, patchHalfWidth, patchHalfHeight},    // Top-right-front
+        {patchHalfLength, patchHalfWidth, -patchHalfHeight},   // Top-right-back
+        {patchHalfLength, -patchHalfWidth, patchHalfHeight},   // Bottom-right-front
+        {patchHalfLength, -patchHalfWidth, -patchHalfHeight},  // Bottom-right-back
+        {-patchHalfLength, patchHalfWidth, patchHalfHeight},   // Top-left-front
+        {-patchHalfLength, patchHalfWidth, -patchHalfHeight},  // Top-left-back
+        {-patchHalfLength, -patchHalfWidth, patchHalfHeight},  // Bottom-left-front
+        {-patchHalfLength, -patchHalfWidth, -patchHalfHeight}  // Bottom-left-back
+    };
+
+    patchPolyhedron = generatePolyhedron(patchEdges);
 }
 
 void TraversabilityGenerator3d::expandAll(const Eigen::Vector3d& startPos)
@@ -1019,6 +1116,7 @@ void TraversabilityGenerator3d::expandAll(TravGenNode* startNode, const double e
     inflateObstacles();
 
 #ifdef ENABLE_DEBUG_DRAWINGS
+    /*
     V3DD::CLEAR_DRAWING("partially_traversable_arrows");
     for (LevelList<TravGenNode*> &l : trMap)
     {
@@ -1050,6 +1148,7 @@ void TraversabilityGenerator3d::expandAll(TravGenNode* startNode, const double e
             }
         }
     }
+    */
 #endif
 
     LOG_DEBUG_S << "TraversabilityGenerator3d: Expanded " << cnd << " traversability nodes.";
