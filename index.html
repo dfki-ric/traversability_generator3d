@@ -87,7 +87,7 @@ Dependencies</h1>
 <h1><a class="anchor" id="autotoc_md3"></a>
 Automatic Install of Dependencies &amp; Build</h1>
 <p>Install dependencies automatically when building <a class="el" href="namespacetraversability__generator3d.html">traversability_generator3d</a>. Defining <code>-DINSTALL_DEPS=ON</code> for cmake, builds and installs the source dependencies automatically. When <code>-DCMAKE_INSTALL_PREFIX</code> is used, the dependencies are also installed there. The install script generates an env.sh file in the <code>CMAKE_INSTALL_PREFIX</code> folder. It exports all neccessary environment variables.</p>
-<div class="fragment"><div class="line">git clone https://github.com/dfki-ric/traversability_generator3d.git -b paper</div>
+<div class="fragment"><div class="line">git clone https://github.com/dfki-ric/traversability_generator3d.git</div>
 <div class="line">cd traversability_generator3d</div>
 <div class="line">mkdir build &amp;&amp; cd build</div>
 <div class="line">cmake -DINSTALL_DEPS=ON -DRUN_TESTS=ON -DCMAKE_INSTALL_PREFIX=./install ..</div>
