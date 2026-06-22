@@ -1000,6 +1000,16 @@ void TraversabilityGenerator3d::setConfig(const TraversabilityConfig &config)
     trMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
     soilMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
 
+    if (mlsGrid)
+    {
+        Eigen::Vector2d newSize = mlsGrid->getSize().array() / trMap.getResolution().array();
+        trMap.extend(Vector2ui(newSize.x(), newSize.y()));
+        trMap.getLocalFrame() = mlsGrid->getLocalFrame();
+
+        soilMap.extend(Vector2ui(newSize.x(), newSize.y()));
+        soilMap.getLocalFrame() = mlsGrid->getLocalFrame();
+    }
+
     double robotHalfLength = config.robotSizeX / 2.0;
     double robotHalfWidth = config.robotSizeY / 2.0;
     double robotHalfHeight = config.robotHeight / 2.0;

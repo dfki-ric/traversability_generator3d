@@ -3,18 +3,18 @@
 travConfig:
 
   # grid
-  gridResolution: 0.3
+  gridResolution: 1.0
   initialPatchVariance: 0.0001
 
   # robot dimensions
-  robotHeight: 0.7
-  robotSizeX: 0.9
-  robotSizeY: 0.6
+  robotHeight: 3.0
+  robotSizeX: 6.0
+  robotSizeY: 3.0
   distToGround: 0.0
 
   # slope / terrain constraints
   maxSlope: 0.45                # [rad]
-  maxStepHeight: 0.25
+  maxStepHeight: 0.45
   inclineLimittingMinSlope: 0.2
   inclineLimittingLimit: 0.1
 

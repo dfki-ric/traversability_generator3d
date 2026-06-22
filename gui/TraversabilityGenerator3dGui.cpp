@@ -531,7 +531,7 @@ void TraversabilityGenerator3dGui::picked(float x, float y, float z,
     V3DD::CLEAR_DRAWING("ugv_nav4d_start_aabb");
     V3DD::DRAW_WIREFRAME_BOX(
         "ugv_nav4d_start_aabb",
-        start.position + base::Vector3d(0, 0, travConfig.distToGround / 2.0),
+        start.position + base::Vector3d(0, 0, (travConfig.robotHeight - travConfig.distToGround) / 2.0),
         start.orientation,
         base::Vector3d(travConfig.robotSizeX,
                        travConfig.robotSizeY,
