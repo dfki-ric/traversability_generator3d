@@ -60,6 +60,11 @@ protected:
     void transformPolyhedron(Polyhedron_3& polyhedron, const Transformation& transform);
     Transformation generateTransform(const Eigen::Vector3d& normal, const Eigen::Vector3d& translation);
     Polyhedron_3 createPolyhedronFromSurfacePatch(const maps::grid::SurfacePatch<maps::grid::MLSConfig::SLOPE> *p, const Eigen::Vector3d& position);
+    std::vector<Eigen::Vector3d> computeRigidRobotCorners(
+        const std::vector<Eigen::Vector3d>& cornerPositions, 
+        const Eigen::Vector3d& contactNormal, 
+        double yaw, 
+        const Eigen::Vector3d& nodePos);
     void drawWireFrameBox(const Eigen::Vector3d& normal, const Eigen::Vector3d& position, const Eigen::Vector3d& size, const Eigen::Vector4d& colorRGBA);
     double sampleTerrainHeightAtCorner(const Eigen::Vector3d& nodePos, double cornerX, double cornerY) const;
     std::shared_ptr<MLGrid > mlsGrid;

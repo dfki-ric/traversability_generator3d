@@ -42,6 +42,7 @@ public:
         , traverseRocks(true)
         , traverseGravel(true)
         , traverseConcrete(true)
+        , articulatedSuspension(true)
     {};
 
     /** The maximum step height that the robot can traverse.
@@ -114,5 +115,6 @@ public:
     bool traverseRocks;
     bool traverseGravel;
     bool traverseConcrete;
+    bool articulatedSuspension;
 };
 }

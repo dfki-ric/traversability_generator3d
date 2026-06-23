@@ -11,6 +11,7 @@ travConfig:
   robotSizeX: 6.0
   robotSizeY: 3.0
   distToGround: 0.0
+  articulatedSuspension: true  # if false, the robot is modeled with a rigid chassis/axles
 
   # slope / terrain constraints
   maxSlope: 0.45                # [rad]

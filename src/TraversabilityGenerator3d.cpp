@@ -478,6 +478,53 @@ std::vector<Eigen::Vector3d> TraversabilityGenerator3d::compute4PointContactPosi
     };
 }
 
+std::vector<Eigen::Vector3d> TraversabilityGenerator3d::computeRigidRobotCorners(
+    const std::vector<Eigen::Vector3d>& cornerPositions, 
+    const Eigen::Vector3d& contactNormal, 
+    double yaw, 
+    const Eigen::Vector3d& nodePos)
+{
+    const double hx = config.robotSizeX / 2.0;
+    const double hy = config.robotSizeY / 2.0;
+
+    Eigen::Vector3d up(0, 0, 1);
+    Eigen::Quaterniond slopeRotation = Eigen::Quaterniond::FromTwoVectors(up, contactNormal);
+    Eigen::AngleAxisd yawRotation(yaw, Eigen::Vector3d::UnitZ());
+    Eigen::Matrix3d R = (slopeRotation * yawRotation).toRotationMatrix();
+
+    std::vector<Eigen::Vector3d> localCorners = {
+        { hx,  hy, 0.0},
+        { hx, -hy, 0.0},
+        {-hx, -hy, 0.0},
+        {-hx,  hy, 0.0}
+    };
+
+    std::vector<Eigen::Vector3d> rotatedCorners;
+    rotatedCorners.reserve(4);
+    for(const auto& lc : localCorners)
+    {
+        rotatedCorners.push_back(R * lc);
+    }
+
+    // Find the height z_center of the flat bottom plane's center
+    double z_center = -1e9;
+    for(size_t i = 0; i < 4; ++i)
+    {
+        double reqZ = cornerPositions[i].z() - rotatedCorners[i].z();
+        if(reqZ > z_center)
+            z_center = reqZ;
+    }
+
+    std::vector<Eigen::Vector3d> flatBottomCorners;
+    flatBottomCorners.reserve(4);
+    for(const auto& rc : rotatedCorners)
+    {
+        flatBottomCorners.push_back(Eigen::Vector3d(nodePos.x(), nodePos.y(), z_center) + rc);
+    }
+
+    return flatBottomCorners;
+}
+
 bool TraversabilityGenerator3d::checkForFrontier(const TravGenNode* node)
 {
     //check direct neighborhood for missing connected patches. If
@@ -629,24 +676,32 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
         return true;
     }
     
-    // Build robot edges from 4-point contact geometry:
-    // Lower 4 corners (from computed positions) + Upper 4 corners (at lower + height offset)
-    std::vector<Eigen::Vector3d> robotEdges4Point;
-    for(const auto& corner : cornerPositions)
-    {
-        robotEdges4Point.push_back(corner);
-    }
-    
     // Compute contact plane normal from 4 corners
     Eigen::Vector3d contactNormal = computeContactPlaneFromCorners(cornerPositions);
     
     // Use contact normal directly for height offset - robot tilts to match terrain slope
     Eigen::Vector3d heightOffset = contactNormal * config.robotHeight;
-    
-    // Add upper 4 corners (offset from lower corners by robot height along contact normal)
+
+    std::vector<Eigen::Vector3d> bottomCorners;
+    if (config.articulatedSuspension)
+    {
+        bottomCorners = cornerPositions;
+    }
+    else
+    {
+        bottomCorners = computeRigidRobotCorners(cornerPositions, contactNormal, 0.0, nodePos);
+    }
+
+    // Build robot edges from 4-point contact geometry:
+    // Lower 4 corners + Upper 4 corners (at lower + height offset)
+    std::vector<Eigen::Vector3d> robotEdges4Point;
+    for(const auto& corner : bottomCorners)
+    {
+        robotEdges4Point.push_back(corner);
+    }
     for(size_t i = 0; i < 4; i++)
     {
-        robotEdges4Point.push_back(cornerPositions[i] + heightOffset);
+        robotEdges4Point.push_back(bottomCorners[i] + heightOffset);
     }
     
     // Build polyhedron from these 8 corners
@@ -721,11 +776,11 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
                             {
                                 for(size_t i = 0; i < 4; i++)
                                 {
-                                    Eigen::Vector3d lo = cornerPositions[i];
-                                    Eigen::Vector3d hi = cornerPositions[i] + heightOffset;
+                                    Eigen::Vector3d lo = bottomCorners[i];
+                                    Eigen::Vector3d hi = bottomCorners[i] + heightOffset;
                                     size_t next = (i + 1) % 4;
-                                    Eigen::Vector3d loNext = cornerPositions[next];
-                                    Eigen::Vector3d hiNext = cornerPositions[next] + heightOffset;
+                                    Eigen::Vector3d loNext = bottomCorners[next];
+                                    Eigen::Vector3d hiNext = bottomCorners[next] + heightOffset;
                                     
                                     V3DD::DRAW_LINE(robotPrefix + "_v" + std::to_string(i), lo, hi, red);
                                     V3DD::DRAW_LINE(robotPrefix + "_lo" + std::to_string(i), lo, loNext, red);
@@ -952,11 +1007,21 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
     Eigen::Vector3d contactNormal = computeContactPlaneFromCorners(robotCorners);
     Eigen::Vector3d heightOffset = contactNormal * config.robotHeight;
 
+    std::vector<Eigen::Vector3d> bottomCorners;
+    if (config.articulatedSuspension)
+    {
+        bottomCorners = robotCorners;
+    }
+    else
+    {
+        bottomCorners = computeRigidRobotCorners(robotCorners, contactNormal, yaw, nodePos);
+    }
+
     // Add upper 4 corners
     std::vector<Eigen::Vector3d> robotEdges8;
-    for (const auto& c : robotCorners)
+    for (const auto& c : bottomCorners)
         robotEdges8.push_back(c);
-    for (const auto& c : robotCorners)
+    for (const auto& c : bottomCorners)
         robotEdges8.push_back(c + heightOffset);
 
     Polyhedron_3 robot = generatePolyhedron(robotEdges8);
@@ -1008,11 +1073,11 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
                             {
                                 for(size_t i = 0; i < 4; i++)
                                 {
-                                    Eigen::Vector3d lo = robotCorners[i];
-                                    Eigen::Vector3d hi = robotCorners[i] + heightOffset;
+                                    Eigen::Vector3d lo = bottomCorners[i];
+                                    Eigen::Vector3d hi = bottomCorners[i] + heightOffset;
                                     size_t next = (i + 1) % 4;
-                                    Eigen::Vector3d loNext = robotCorners[next];
-                                    Eigen::Vector3d hiNext = robotCorners[next] + heightOffset;
+                                    Eigen::Vector3d loNext = bottomCorners[next];
+                                    Eigen::Vector3d hiNext = bottomCorners[next] + heightOffset;
                                     
                                     V3DD::DRAW_LINE(robotPrefix + "_v" + std::to_string(i), lo, hi, red);
                                     V3DD::DRAW_LINE(robotPrefix + "_lo" + std::to_string(i), lo, loNext, red);

@@ -219,6 +219,9 @@ void TraversabilityGenerator3dGui::setupUI()
     traverseConcreteCheck = new QCheckBox("Traverse Concrete");
     paramLayout->addWidget(traverseConcreteCheck, 4, 6, 1, 2);
 
+    articulatedSuspensionCheck = new QCheckBox("Articulated Suspension");
+    paramLayout->addWidget(articulatedSuspensionCheck, 5, 0, 1, 2);
+
     layout->addLayout(paramLayout);
 
     resetButton = new QPushButton("Reset Traversability and Soil Maps");
@@ -257,6 +260,7 @@ void TraversabilityGenerator3dGui::setupUI()
     connect(traverseRocksCheck, SIGNAL(toggled(bool)), this, SLOT(updateConfigFromUI()));
     connect(traverseGravelCheck, SIGNAL(toggled(bool)), this, SLOT(updateConfigFromUI()));
     connect(traverseConcreteCheck, SIGNAL(toggled(bool)), this, SLOT(updateConfigFromUI()));
+    connect(articulatedSuspensionCheck, SIGNAL(toggled(bool)), this, SLOT(updateConfigFromUI()));
 }
 
 void TraversabilityGenerator3dGui::loadTravConfigFromYaml(const std::string& file)
@@ -290,6 +294,7 @@ void TraversabilityGenerator3dGui::loadTravConfigFromYaml(const std::string& fil
     travConfig.traverseRocks            = cfg["traverseRocks"].as<bool>();
     travConfig.traverseGravel           = cfg["traverseGravel"].as<bool>();
     travConfig.traverseConcrete         = cfg["traverseConcrete"].as<bool>();
+    travConfig.articulatedSuspension    = cfg["articulatedSuspension"] ? cfg["articulatedSuspension"].as<bool>() : true;
     
     travConfig.obstacleInflationMultiplier = cfg["obstacleInflationMultiplier"] ? cfg["obstacleInflationMultiplier"].as<double>() : travConfig.obstacleInflationMultiplier;
 
@@ -383,6 +388,10 @@ void TraversabilityGenerator3dGui::loadTravConfigFromYaml(const std::string& fil
     traverseConcreteCheck->blockSignals(true);
     traverseConcreteCheck->setChecked(travConfig.traverseConcrete);
     traverseConcreteCheck->blockSignals(false);
+
+    articulatedSuspensionCheck->blockSignals(true);
+    articulatedSuspensionCheck->setChecked(travConfig.articulatedSuspension);
+    articulatedSuspensionCheck->blockSignals(false);
 }
 
 static traversability_generator3d::SoilType soilTypeFromString(const std::string& s)
@@ -692,6 +701,7 @@ void TraversabilityGenerator3dGui::updateConfigFromUI()
     travConfig.traverseRocks            = traverseRocksCheck->isChecked();
     travConfig.traverseGravel           = traverseGravelCheck->isChecked();
     travConfig.traverseConcrete         = traverseConcreteCheck->isChecked();
+    travConfig.articulatedSuspension    = articulatedSuspensionCheck->isChecked();
 
     // enum
     std::string s = slopeMetricCombo->currentText().toStdString();
