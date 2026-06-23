@@ -440,23 +440,13 @@ double TraversabilityGenerator3d::sampleTerrainHeightAtCorner(const Eigen::Vecto
     return bestHeight;
 }
 
-Eigen::Vector3d TraversabilityGenerator3d::computeContactPlaneFromCorners(const Eigen::Vector3d& nodePos)
+Eigen::Vector3d TraversabilityGenerator3d::computeContactPlaneFromCorners(const std::vector<Eigen::Vector3d>& cornerPositions)
 {
-    // Sample terrain heights at 4 corners via shared helper
-    const double hx = config.robotSizeX / 2.0;
-    const double hy = config.robotSizeY / 2.0;
-    std::vector<Eigen::Vector3d> cornerPositions = {
-        {nodePos.x() + hx, nodePos.y() + hy, sampleTerrainHeightAtCorner(nodePos,  hx,  hy)},
-        {nodePos.x() + hx, nodePos.y() - hy, sampleTerrainHeightAtCorner(nodePos,  hx, -hy)},
-        {nodePos.x() - hx, nodePos.y() + hy, sampleTerrainHeightAtCorner(nodePos, -hx,  hy)},
-        {nodePos.x() - hx, nodePos.y() - hy, sampleTerrainHeightAtCorner(nodePos, -hx, -hy)},
-    };
-    
-    // Fit plane through 4 corner points using PCA
+    // Fit plane through corner points using PCA
     Eigen::Vector3d centroid = Eigen::Vector3d::Zero();
     for(const auto& p : cornerPositions)
         centroid += p;
-    centroid /= 4.0;
+    centroid /= static_cast<double>(cornerPositions.size());
 
     Eigen::Matrix3d cov = Eigen::Matrix3d::Zero();
     for(const auto& p : cornerPositions)
@@ -464,7 +454,7 @@ Eigen::Vector3d TraversabilityGenerator3d::computeContactPlaneFromCorners(const 
         Eigen::Vector3d centered = p - centroid;
         cov += centered * centered.transpose();
     }
-    cov /= 4.0;
+    cov /= static_cast<double>(cornerPositions.size());
 
     Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> solver(cov);
     Eigen::Vector3d normal = solver.eigenvectors().col(0); // smallest eigenvalue = plane normal
@@ -648,7 +638,7 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
     }
     
     // Compute contact plane normal from 4 corners
-    Eigen::Vector3d contactNormal = computeContactPlaneFromCorners(nodePos);
+    Eigen::Vector3d contactNormal = computeContactPlaneFromCorners(cornerPositions);
     
     // Use contact normal directly for height offset - robot tilts to match terrain slope
     Eigen::Vector3d heightOffset = contactNormal * config.robotHeight;
@@ -907,7 +897,7 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
     }
 
     // Compute contact normal from the corners
-    Eigen::Vector3d contactNormal = computeContactPlaneFromCorners(nodePos);
+    Eigen::Vector3d contactNormal = computeContactPlaneFromCorners(robotCorners);
     Eigen::Vector3d heightOffset = contactNormal * config.robotHeight;
 
     // Add upper 4 corners

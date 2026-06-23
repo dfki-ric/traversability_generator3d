@@ -78,7 +78,7 @@ protected:
     std::vector<TravGenNode *> frontierNodesGrowList;
     
     bool computePlaneRansac(TravGenNode &node);
-    Eigen::Vector3d computeContactPlaneFromCorners(const Eigen::Vector3d& nodePos);
+    Eigen::Vector3d computeContactPlaneFromCorners(const std::vector<Eigen::Vector3d>& cornerPositions);
     std::vector<Eigen::Vector3d> compute4PointContactPositions(const Eigen::Vector3d& nodePos);
     double computeSlope(const Eigen::Hyperplane< double, int(3) >& plane) const;
     Eigen::Vector3d computeSlopeDirection(const Eigen::Hyperplane< double, int(3) >& plane) const;
