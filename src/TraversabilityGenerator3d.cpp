@@ -232,7 +232,7 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
     Eigen::ParametrizedLine<double, 3> line(Vector3d::Zero(), Eigen::Vector3d::UnitZ());
     Vector3d newPos =  line.intersectionPoint(node.getUserData().plane);
 
-    if (newPos.x() > 0.0001 || newPos.y() > 0.0001) {
+    if (std::abs(newPos.x()) > 0.0001 || std::abs(newPos.y()) > 0.0001) {
         LOG_ERROR_S << "TraversabilityGenerator3d: Adjustment height calculation failed. "
                     << "Expected near-zero offset, but got newPos=(" 
                     << newPos.x() << ", " << newPos.y() << ")";
@@ -646,15 +646,17 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
     // Add upper 4 corners (offset from lower corners by robot height along contact normal)
     for(size_t i = 0; i < 4; i++)
     {
-        robotEdges4Point.push_back(cornerPositions[i] + heightOffset + Eigen::Vector3d(0,0,config.maxStepHeight));
+        robotEdges4Point.push_back(cornerPositions[i] + heightOffset);
     }
     
     // Build polyhedron from these 8 corners
     Polyhedron_3 robot = generatePolyhedron(robotEdges4Point);
 
-    const double halfSmall = std::min(config.robotSizeX, config.robotSizeY) / 2.0;
-    Eigen::Vector3d min(-halfSmall, -halfSmall, 0);
-    Eigen::Vector3d max( halfSmall,  halfSmall, config.robotHeight);
+    // Query MLS patches across the entire unrotated robot footprint bounding box
+    const double halfX = config.robotSizeX / 2.0;
+    const double halfY = config.robotSizeY / 2.0;
+    Eigen::Vector3d min(-halfX, -halfY, 0);
+    Eigen::Vector3d max( halfX,  halfY, config.robotHeight);
 
     min += nodePos;
     max += nodePos;
@@ -1202,6 +1204,37 @@ void TraversabilityGenerator3d::inflateObstacles()
 
     for (TravGenNode *n : obstacleNodesGrowList)
     {
+        // Check the obstacle node itself first to see if any orientation is safe
+        if (n->getType() == TraversabilityNodeBase::OBSTACLE)
+        {
+            if (evaluatedNodes.insert(n).second)
+            {
+                std::vector<double> safeYaws;
+                for (int i = 0; i < 4; ++i)
+                {
+                    double yaw = i * (M_PI / 4.0);
+                    if (checkCollisionForYaw(n, yaw))
+                    {
+                        safeYaws.push_back(yaw);
+                        safeYaws.push_back(yaw + M_PI);
+                    }
+                }
+
+                if (!safeYaws.empty())
+                {
+                    n->setType(TraversabilityNodeBase::TRAVERSABLE);
+                    n->getUserData().nodeType = NodeType::PARTIALLY_TRAVERSABLE;
+                    n->getUserData().allowedOrientations.clear();
+                    for (double yaw : safeYaws)
+                    {
+                        n->getUserData().allowedOrientations.emplace_back(
+                            base::Angle::fromRad(yaw - M_PI / 8.0), M_PI / 4.0
+                        );
+                    }
+                }
+            }
+        }
+
         const Index nIdx = n->getIndex();
         n->eachConnectedNode([&] (maps::grid::TraversabilityNodeBase *neighbor, bool &expandNode, bool &stop)
         {
@@ -1519,7 +1552,7 @@ bool TraversabilityGenerator3d::isNodeFreeOfObstacles(const traversability_gener
     const Eigen::AlignedBox3d boundingBox(min, max);
     
     size_t numIntersections = 0;
-    const View area = mlsGrid->intersectCuboid(Eigen::AlignedBox3d(min, max), numIntersections);
+    const View area = mlsGrid->intersectCuboid(boundingBox, numIntersections);
     if(numIntersections > 0)
         return false;
     
@@ -1890,18 +1923,16 @@ bool TraversabilityGenerator3d::addSoilNode(const SoilSample& sample){
 
     addConnectedPatches(sampleNode);
 
+    std::unordered_set<SoilNode*> visitedNodes;
+    visitedNodes.insert(sampleNode);
+
     std::deque<SoilNode *> candidates;
     candidates.push_back(sampleNode);
 
-    std::unordered_set<SoilNode*> expandedNodes;
     while(!candidates.empty())
     {
         SoilNode *currentNode = candidates.front();
         candidates.pop_front();   
-        if (expandedNodes.find(currentNode) != expandedNodes.end()) {
-            continue;
-        }
-        expandedNodes.insert(currentNode);
 
         Eigen::Vector3d nodePos;
         if (!soilMap.fromGrid(currentNode->getIndex(), nodePos, currentNode->getHeight())) {
@@ -1973,8 +2004,10 @@ bool TraversabilityGenerator3d::addSoilNode(const SoilSample& sample){
             }
 
             SoilNode* n = static_cast<SoilNode*>(neighbor);
-            addConnectedPatches(n);
-            candidates.push_back(n);
+            if (visitedNodes.insert(n).second) {
+                addConnectedPatches(n);
+                candidates.push_back(n);
+            }
         }
     }
     return true;

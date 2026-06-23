@@ -93,7 +93,7 @@ protected:
     /** @return false if no allowed orientation was found (e.g. due to extreme slope)*/
     bool computeAllowedOrientations(TravGenNode* node);
     
-    static bool checkForFrontier(const TravGenNode* node);
+    bool checkForFrontier(const TravGenNode* node);
     
     void addConnectedPatches(TravGenNode* node);
 
