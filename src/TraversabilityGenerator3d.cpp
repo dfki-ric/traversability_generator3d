@@ -709,61 +709,100 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
                 if(CGAL::Polygon_mesh_processing::do_intersect(patch,robot))
                 {
 #ifdef ENABLE_DEBUG_DRAWINGS
-                    /*
-                    Eigen::Vector3f normalf = p->getNormal(); 
-                    Eigen::Vector3d normal{normalf.x(), normalf.y(), normalf.z()};
-                    normal.normalize();
-
-                    Eigen::Vector3d vecV;
-                    double horizNorm = std::sqrt(normal.x() * normal.x() + normal.y() * normal.y());
-                    if (horizNorm > 1e-5)
                     {
-                        vecV = Eigen::Vector3d(-normal.y(), normal.x(), 0.0) / horizNorm;
+                        static int collisionCounter = 0;
+                        collisionCounter++;
+                        if (collisionCounter % 200 == 0)
+                        {
+                            std::string robotPrefix = "colliding_robot_" + std::to_string(collisionCounter);
+                            Eigen::Vector4d red{1.0, 0.0, 0.0, 1.0};
+                            
+                            V3DD::COMPLEX_DRAWING([&]
+                            {
+                                for(size_t i = 0; i < 4; i++)
+                                {
+                                    Eigen::Vector3d lo = cornerPositions[i];
+                                    Eigen::Vector3d hi = cornerPositions[i] + heightOffset;
+                                    size_t next = (i + 1) % 4;
+                                    Eigen::Vector3d loNext = cornerPositions[next];
+                                    Eigen::Vector3d hiNext = cornerPositions[next] + heightOffset;
+                                    
+                                    V3DD::DRAW_LINE(robotPrefix + "_v" + std::to_string(i), lo, hi, red);
+                                    V3DD::DRAW_LINE(robotPrefix + "_lo" + std::to_string(i), lo, loNext, red);
+                                    V3DD::DRAW_LINE(robotPrefix + "_hi" + std::to_string(i), hi, hiNext, red);
+                                }
+                            });
+
+                            // Draw colliding MLS patch sloped prism
+                            std::vector<Eigen::Vector3f> polygonPoints;
+                            Eigen::Vector2f cellCenter = pos.head<2>().cast<float>();
+                            Eigen::Vector2f cellSize(config.gridResolution, config.gridResolution);
+                            maps::grid::getPolygon(polygonPoints, *p, cellCenter, cellSize);
+
+                            if (polygonPoints.size() >= 3)
+                            {
+                                std::string patchPrefix = "colliding_patch_" + std::to_string(collisionCounter);
+                                Eigen::Vector4d yellow{1.0, 0.8, 0.0, 1.0};
+                                Eigen::Vector3f normalf = p->getNormal();
+                                if (normalf.z() < 0)
+                                    normalf *= -1.0f;
+                                Eigen::Vector3d normal{normalf.x(), normalf.y(), normalf.z()};
+                                if (normal.norm() > 1e-6)
+                                    normal.normalize();
+                                else
+                                    normal = Eigen::Vector3d::UnitZ();
+                                const double thickness = 0.02;
+
+                                V3DD::COMPLEX_DRAWING([&]
+                                {
+                                    for (size_t i = 0; i < polygonPoints.size(); i++)
+                                    {
+                                        Eigen::Vector3d hi = polygonPoints[i].cast<double>();
+                                        Eigen::Vector3d lo = hi - thickness * normal;
+                                        size_t next = (i + 1) % polygonPoints.size();
+                                        Eigen::Vector3d hiNext = polygonPoints[next].cast<double>();
+                                        Eigen::Vector3d loNext = hiNext - thickness * normal;
+
+                                        V3DD::DRAW_LINE(patchPrefix + "_v" + std::to_string(i), lo, hi, yellow);
+                                        V3DD::DRAW_LINE(patchPrefix + "_lo" + std::to_string(i), lo, loNext, yellow);
+                                        V3DD::DRAW_LINE(patchPrefix + "_hi" + std::to_string(i), hi, hiNext, yellow);
+                                    }
+                                });
+                            }
+                            else
+                            {
+                                std::string patchPrefix = "colliding_patch_" + std::to_string(collisionCounter);
+                                Eigen::Vector4d yellow{1.0, 0.8, 0.0, 1.0};
+                                float minZ, maxZ;
+                                p->getRange(minZ, maxZ);
+                                double hres = config.gridResolution / 2.0;
+
+                                std::vector<Eigen::Vector3d> corners = {
+                                    {pos.x() + hres, pos.y() + hres, (double)minZ},
+                                    {pos.x() + hres, pos.y() - hres, (double)minZ},
+                                    {pos.x() - hres, pos.y() - hres, (double)minZ},
+                                    {pos.x() - hres, pos.y() + hres, (double)minZ}
+                                };
+                                double height = maxZ - minZ;
+
+                                V3DD::COMPLEX_DRAWING([&]
+                                {
+                                    for (size_t i = 0; i < 4; i++)
+                                    {
+                                        Eigen::Vector3d lo = corners[i];
+                                        Eigen::Vector3d hi = corners[i] + Eigen::Vector3d(0, 0, height);
+                                        size_t next = (i + 1) % 4;
+                                        Eigen::Vector3d loNext = corners[next];
+                                        Eigen::Vector3d hiNext = corners[next] + Eigen::Vector3d(0, 0, height);
+
+                                        V3DD::DRAW_LINE(patchPrefix + "_v" + std::to_string(i), lo, hi, yellow);
+                                        V3DD::DRAW_LINE(patchPrefix + "_lo" + std::to_string(i), lo, loNext, yellow);
+                                        V3DD::DRAW_LINE(patchPrefix + "_hi" + std::to_string(i), hi, hiNext, yellow);
+                                    }
+                                });
+                            }
+                        }
                     }
-                    else
-                    {
-                        vecV = Eigen::Vector3d(0.0, 1.0, 0.0);
-                    }
-
-                    double halfThickness = 0.01;
-                    double halfWidth = config.gridResolution / 2.0;
-                    double h_val = std::abs(normal.z()) * config.gridResolution + (1.0 - std::abs(normal.z())) * (p->getTop() - p->getBottom());
-                    double halfHeight = std::max(0.02, h_val) / 2.0;
-
-                    Eigen::Vector3d vecThickness = normal * halfThickness;
-                    Eigen::Vector3d vecWidth = vecV * halfWidth;
-                    Eigen::Vector3d vecHeight = normal.cross(vecV) * halfHeight;
-
-                    std::vector<Eigen::Vector3d> corners = {
-                        pos + vecThickness + vecWidth + vecHeight,
-                        pos + vecThickness + vecWidth - vecHeight,
-                        pos + vecThickness - vecWidth + vecHeight,
-                        pos + vecThickness - vecWidth - vecHeight,
-                        pos - vecThickness + vecWidth + vecHeight,
-                        pos - vecThickness + vecWidth - vecHeight,
-                        pos - vecThickness - vecWidth + vecHeight,
-                        pos - vecThickness - vecWidth - vecHeight
-                    };
-
-                    Eigen::Vector4d blue{0.0, 0.0, 1.0, 1.0};
-                    std::string prefix = "traversability_generator3d_mls_patch_box";
-
-                    V3DD::COMPLEX_DRAWING([&]
-                    {
-                        V3DD::DRAW_LINE(prefix + "_v0", corners[1], corners[0], blue);
-                        V3DD::DRAW_LINE(prefix + "_v1", corners[3], corners[2], blue);
-                        V3DD::DRAW_LINE(prefix + "_v2", corners[5], corners[4], blue);
-                        V3DD::DRAW_LINE(prefix + "_v3", corners[7], corners[6], blue);
-                        V3DD::DRAW_LINE(prefix + "_l0", corners[1], corners[3], blue);
-                        V3DD::DRAW_LINE(prefix + "_l1", corners[3], corners[7], blue);
-                        V3DD::DRAW_LINE(prefix + "_l2", corners[7], corners[5], blue);
-                        V3DD::DRAW_LINE(prefix + "_l3", corners[5], corners[1], blue);
-                        V3DD::DRAW_LINE(prefix + "_u0", corners[0], corners[2], blue);
-                        V3DD::DRAW_LINE(prefix + "_u1", corners[2], corners[6], blue);
-                        V3DD::DRAW_LINE(prefix + "_u2", corners[6], corners[4], blue);
-                        V3DD::DRAW_LINE(prefix + "_u3", corners[4], corners[0], blue);
-                    });
-                    */
 #endif
                     return false;
                 }
@@ -808,48 +847,59 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
 
 Polyhedron_3 TraversabilityGenerator3d::createPolyhedronFromSurfacePatch(const SurfacePatch<MLSConfig::SLOPE> *p, const Eigen::Vector3d& position){
 
-    // Extract the normal and center of the surface patch
+    // Extract the normal of the surface patch
     Eigen::Vector3f normalf = p->getNormal();  // Normal vector of the plane
+    if (normalf.z() < 0)
+        normalf *= -1.0f;
     Eigen::Vector3d normal{normalf.x(), normalf.y(), normalf.z()};
-    normal.normalize();
+    if (normal.norm() > 1e-6)
+        normal.normalize();
+    else
+        normal = Eigen::Vector3d::UnitZ();
 
-    // Dynamically calculate the patch height/thickness from MLS patch bounds,
-    // ensuring a minimum height of 0.02m to avoid degenerate flat polyhedrons.
-    double currentPatchHeight = std::max(0.02, (double)(p->getTop() - p->getBottom()));
+    std::vector<Eigen::Vector3f> polygonPoints;
+    Eigen::Vector2f cellCenter = position.head<2>().cast<float>();
+    Eigen::Vector2f cellSize(config.gridResolution, config.gridResolution);
 
-    double patchHalfLength = config.gridResolution / 2.0;
-    double patchHalfWidth = config.gridResolution / 2.0;
-    double patchHalfHeight = currentPatchHeight / 2.0;
+    maps::grid::getPolygon(polygonPoints, *p, cellCenter, cellSize);
 
-    std::vector<Eigen::Vector3d> dynamicPatchEdges = {
-        {patchHalfLength, patchHalfWidth, patchHalfHeight},    // Top-right-front
-        {patchHalfLength, patchHalfWidth, -patchHalfHeight},   // Top-right-back
-        {patchHalfLength, -patchHalfWidth, patchHalfHeight},   // Bottom-right-front
-        {patchHalfLength, -patchHalfWidth, -patchHalfHeight},  // Bottom-right-back
-        {-patchHalfLength, patchHalfWidth, patchHalfHeight},   // Top-left-front
-        {-patchHalfLength, patchHalfWidth, -patchHalfHeight},  // Top-left-back
-        {-patchHalfLength, -patchHalfWidth, patchHalfHeight},  // Bottom-left-front
-        {-patchHalfLength, -patchHalfWidth, -patchHalfHeight}  // Bottom-left-back
-    };
+    std::vector<Eigen::Vector3d> polyhedronPoints;
+    const double thickness = 0.02;
 
-    Polyhedron_3 patch;
-    // If the patch normal is close to vertical (ground/slope), rotate to match the slope.
-    // Otherwise, for near-vertical wall patches (horizontal normal), keep the column vertical (no rotation).
-    if (std::abs(normal.z()) > 0.707)
+    if (polygonPoints.size() >= 3)
     {
-        patch = generatePolyhedron(dynamicPatchEdges);
-        Transformation transform = generateTransform(normal, position);
-        transformPolyhedron(patch, transform);
+        polyhedronPoints.reserve(polygonPoints.size() * 2);
+        for (const auto& pt : polygonPoints)
+        {
+            Eigen::Vector3d pt_top = pt.cast<double>();
+            polyhedronPoints.push_back(pt_top);
+
+            Eigen::Vector3d pt_bottom = pt_top - thickness * normal;
+            polyhedronPoints.push_back(pt_bottom);
+        }
     }
     else
     {
-        for (auto& pt : dynamicPatchEdges)
+        // Fallback: cell-aligned box if getPolygon yields less than 3 points
+        float minZ, maxZ;
+        p->getRange(minZ, maxZ);
+        double hres = config.gridResolution / 2.0;
+
+        std::vector<Eigen::Vector2d> corners2D = {
+            {position.x() + hres, position.y() + hres},
+            {position.x() + hres, position.y() - hres},
+            {position.x() - hres, position.y() - hres},
+            {position.x() - hres, position.y() + hres}
+        };
+        polyhedronPoints.reserve(8);
+        for (const auto& c : corners2D)
         {
-            pt += position;
+            polyhedronPoints.push_back({c.x(), c.y(), (double)maxZ});
+            polyhedronPoints.push_back({c.x(), c.y(), (double)minZ});
         }
-        patch = generatePolyhedron(dynamicPatchEdges);
     }
-    return patch;
+
+    return generatePolyhedron(polyhedronPoints);
 }
 
 bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double yaw)
@@ -945,6 +995,102 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
                 Polyhedron_3 patch = createPolyhedronFromSurfacePatch(p, pos);
                 if (CGAL::Polygon_mesh_processing::do_intersect(patch, robot))
                 {
+#ifdef ENABLE_DEBUG_DRAWINGS
+                    {
+                        static int yawCollisionCounter = 0;
+                        yawCollisionCounter++;
+                        if (yawCollisionCounter % 200 == 0)
+                        {
+                            std::string robotPrefix = "colliding_robot_yaw_" + std::to_string(yawCollisionCounter);
+                            Eigen::Vector4d red{1.0, 0.0, 0.0, 1.0};
+                            
+                            V3DD::COMPLEX_DRAWING([&]
+                            {
+                                for(size_t i = 0; i < 4; i++)
+                                {
+                                    Eigen::Vector3d lo = robotCorners[i];
+                                    Eigen::Vector3d hi = robotCorners[i] + heightOffset;
+                                    size_t next = (i + 1) % 4;
+                                    Eigen::Vector3d loNext = robotCorners[next];
+                                    Eigen::Vector3d hiNext = robotCorners[next] + heightOffset;
+                                    
+                                    V3DD::DRAW_LINE(robotPrefix + "_v" + std::to_string(i), lo, hi, red);
+                                    V3DD::DRAW_LINE(robotPrefix + "_lo" + std::to_string(i), lo, loNext, red);
+                                    V3DD::DRAW_LINE(robotPrefix + "_hi" + std::to_string(i), hi, hiNext, red);
+                                }
+                            });
+
+                            // Draw colliding MLS patch sloped prism
+                            std::vector<Eigen::Vector3f> polygonPoints;
+                            Eigen::Vector2f cellCenter = pos.head<2>().cast<float>();
+                            Eigen::Vector2f cellSize(config.gridResolution, config.gridResolution);
+                            maps::grid::getPolygon(polygonPoints, *p, cellCenter, cellSize);
+
+                            if (polygonPoints.size() >= 3)
+                            {
+                                std::string patchPrefix = "colliding_patch_yaw_" + std::to_string(yawCollisionCounter);
+                                Eigen::Vector4d yellow{1.0, 0.8, 0.0, 1.0};
+                                Eigen::Vector3f normalf = p->getNormal();
+                                if (normalf.z() < 0)
+                                    normalf *= -1.0f;
+                                Eigen::Vector3d normal{normalf.x(), normalf.y(), normalf.z()};
+                                if (normal.norm() > 1e-6)
+                                    normal.normalize();
+                                else
+                                    normal = Eigen::Vector3d::UnitZ();
+                                const double thickness = 0.02;
+
+                                V3DD::COMPLEX_DRAWING([&]
+                                {
+                                    for (size_t i = 0; i < polygonPoints.size(); i++)
+                                    {
+                                        Eigen::Vector3d hi = polygonPoints[i].cast<double>();
+                                        Eigen::Vector3d lo = hi - thickness * normal;
+                                        size_t next = (i + 1) % polygonPoints.size();
+                                        Eigen::Vector3d hiNext = polygonPoints[next].cast<double>();
+                                        Eigen::Vector3d loNext = hiNext - thickness * normal;
+
+                                        V3DD::DRAW_LINE(patchPrefix + "_v" + std::to_string(i), lo, hi, yellow);
+                                        V3DD::DRAW_LINE(patchPrefix + "_lo" + std::to_string(i), lo, loNext, yellow);
+                                        V3DD::DRAW_LINE(patchPrefix + "_hi" + std::to_string(i), hi, hiNext, yellow);
+                                    }
+                                });
+                            }
+                            else
+                            {
+                                std::string patchPrefix = "colliding_patch_yaw_" + std::to_string(yawCollisionCounter);
+                                Eigen::Vector4d yellow{1.0, 0.8, 0.0, 1.0};
+                                float minZ, maxZ;
+                                p->getRange(minZ, maxZ);
+                                double hres = config.gridResolution / 2.0;
+
+                                std::vector<Eigen::Vector3d> corners = {
+                                    {pos.x() + hres, pos.y() + hres, (double)minZ},
+                                    {pos.x() + hres, pos.y() - hres, (double)minZ},
+                                    {pos.x() - hres, pos.y() - hres, (double)minZ},
+                                    {pos.x() - hres, pos.y() + hres, (double)minZ}
+                                };
+                                double height = maxZ - minZ;
+
+                                V3DD::COMPLEX_DRAWING([&]
+                                {
+                                    for (size_t i = 0; i < 4; i++)
+                                    {
+                                        Eigen::Vector3d lo = corners[i];
+                                        Eigen::Vector3d hi = corners[i] + Eigen::Vector3d(0, 0, height);
+                                        size_t next = (i + 1) % 4;
+                                        Eigen::Vector3d loNext = corners[next];
+                                        Eigen::Vector3d hiNext = corners[next] + Eigen::Vector3d(0, 0, height);
+
+                                        V3DD::DRAW_LINE(patchPrefix + "_v" + std::to_string(i), lo, hi, yellow);
+                                        V3DD::DRAW_LINE(patchPrefix + "_lo" + std::to_string(i), lo, loNext, yellow);
+                                        V3DD::DRAW_LINE(patchPrefix + "_hi" + std::to_string(i), hi, hiNext, yellow);
+                                    }
+                                });
+                            }
+                        }
+                    }
+#endif
                     return false; // collision found — this yaw is not safe
                 }
             }
