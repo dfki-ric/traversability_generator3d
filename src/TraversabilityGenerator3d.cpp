@@ -586,8 +586,8 @@ bool TraversabilityGenerator3d::checkStepHeightAABB(TravGenNode *node)
     // min(halfX, halfY) to any obstacle are already obstacle-free by construction;
     // the remaining gap to the rotation-safe circle is covered by inflateObstacles.
     const double halfSmall = std::min(config.robotSizeX, config.robotSizeY) / 2.0;
-    Eigen::Vector3d min(-halfSmall, -halfSmall, 0);
-    Eigen::Vector3d max( halfSmall,  halfSmall, config.robotHeight);
+    Eigen::Vector3d min(-halfSmall, -halfSmall, config.maxStepHeight);
+    Eigen::Vector3d max( halfSmall,  halfSmall, config.maxStepHeight + config.robotHeight);
 
     min += nodePos;
     max += nodePos;
@@ -710,8 +710,8 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
     // Query MLS patches across the entire unrotated robot footprint bounding box
     const double halfX = config.robotSizeX / 2.0;
     const double halfY = config.robotSizeY / 2.0;
-    Eigen::Vector3d min(-halfX, -halfY, 0);
-    Eigen::Vector3d max( halfX,  halfY, config.robotHeight);
+    Eigen::Vector3d min(-halfX, -halfY, config.maxStepHeight);
+    Eigen::Vector3d max( halfX,  halfY, config.maxStepHeight + config.robotHeight);
 
     min += nodePos;
     max += nodePos;
@@ -1026,10 +1026,14 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
 
     Polyhedron_3 robot = generatePolyhedron(robotEdges8);
 
-    // Search area: use half-diagonal as search radius (covers all rotations)
-    const double halfDiag = std::sqrt(hx * hx + hy * hy);
-    Eigen::Vector3d searchMin(-halfDiag, -halfDiag, 0);
-    Eigen::Vector3d searchMax( halfDiag,  halfDiag, config.robotHeight);
+    // Search area: use the actual rotated AABB for this specific yaw
+    // instead of the worst-case half-diagonal (which over-estimates for non-45° yaws)
+    const double cosY = std::abs(std::cos(yaw));
+    const double sinY = std::abs(std::sin(yaw));
+    const double halfExtentX = hx * cosY + hy * sinY;
+    const double halfExtentY = hx * sinY + hy * cosY;
+    Eigen::Vector3d searchMin(-halfExtentX, -halfExtentY, config.maxStepHeight);
+    Eigen::Vector3d searchMax( halfExtentX,  halfExtentY, config.maxStepHeight + config.robotHeight);
     searchMin += nodePos;
     searchMax += nodePos;
 
@@ -1754,7 +1758,7 @@ bool TraversabilityGenerator3d::isNodeFreeOfObstacles(const traversability_gener
     }
 
     Eigen::Vector3d min(-config.gridResolution/2.0 + 1e-5, -config.gridResolution / 2.0 + 1e-5, config.maxStepHeight);
-    Eigen::Vector3d max(config.gridResolution/2.0 - 1e-5, config.gridResolution/2.0 - 1e-5, config.robotHeight);
+    Eigen::Vector3d max(config.gridResolution/2.0 - 1e-5, config.gridResolution/2.0 - 1e-5, config.maxStepHeight + config.robotHeight);
     
     
     min += nodePos;
