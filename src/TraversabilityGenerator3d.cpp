@@ -1025,16 +1025,13 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
         robotEdges8.push_back(c + heightOffset);
 
     Polyhedron_3 robot = generatePolyhedron(robotEdges8);
+    
+    // Search area: use half-diagonal as search radius (covers all rotations)
+    const double halfDiag = std::sqrt(hx * hx + hy * hy);
+    Eigen::Vector3d searchMin(-halfDiag, -halfDiag, config.maxStepHeight);
+    Eigen::Vector3d searchMax( halfDiag,  halfDiag, config.maxStepHeight + config.robotHeight);
 
-    // Search area: use the actual rotated AABB for this specific yaw
-    // instead of the worst-case half-diagonal (which over-estimates for non-45° yaws)
-    const double cosY = std::abs(std::cos(yaw));
-    const double sinY = std::abs(std::sin(yaw));
-    const double halfExtentX = hx * cosY + hy * sinY;
-    const double halfExtentY = hx * sinY + hy * cosY;
-    Eigen::Vector3d searchMin(-halfExtentX, -halfExtentY, config.maxStepHeight);
-    Eigen::Vector3d searchMax( halfExtentX,  halfExtentY, config.maxStepHeight + config.robotHeight);
-    searchMin += nodePos;
+   searchMin += nodePos;
     searchMax += nodePos;
 
     const Eigen::AlignedBox3d limitBox(searchMin, searchMax);
