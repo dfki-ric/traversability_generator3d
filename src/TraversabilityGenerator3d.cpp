@@ -1166,6 +1166,38 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
     return true; // no collision — yaw is safe
 }
 
+bool TraversabilityGenerator3d::computeSafeOrientations(TravGenNode* node)
+{
+    // Sample yaws over [0,180deg); the rectangular footprint is 180deg-symmetric, so each safe
+    // sample is mirrored by +180deg. Higher numYawSamples => finer resolution, slower map gen.
+    const int numSamples = std::max(1, config.numYawSamples);
+    const double step = M_PI / numSamples;
+
+    std::vector<double> safeYaws;
+    for (int i = 0; i < numSamples; ++i)
+    {
+        const double yaw = i * step;
+        if (checkCollisionForYaw(node, yaw))
+        {
+            safeYaws.push_back(yaw);
+            safeYaws.push_back(yaw + M_PI);
+        }
+    }
+
+    if (safeYaws.empty())
+        return false;
+
+    // Each safe yaw gets a wedge as wide as the sampling step (centered on the yaw), so wedges
+    // tile the sampled directions without large gaps and stay tighter as resolution increases.
+    node->getUserData().allowedOrientations.clear();
+    for (const double yaw : safeYaws)
+    {
+        node->getUserData().allowedOrientations.emplace_back(
+            base::Angle::fromRad(yaw - step / 2.0), step);
+    }
+    return true;
+}
+
 void TraversabilityGenerator3d::inflateFrontiers()
 {
     const double growRadiusSquared = std::pow(std::sqrt(config.robotSizeX * config.robotSizeX + config.robotSizeY * config.robotSizeY) / 2.0, 2);
@@ -1421,28 +1453,10 @@ void TraversabilityGenerator3d::inflateObstacles()
         {
             if (evaluatedNodes.insert(n).second)
             {
-                std::vector<double> safeYaws;
-                for (int i = 0; i < 4; ++i)
-                {
-                    double yaw = i * (M_PI / 4.0);
-                    if (checkCollisionForYaw(n, yaw))
-                    {
-                        safeYaws.push_back(yaw);
-                        safeYaws.push_back(yaw + M_PI);
-                    }
-                }
-
-                if (!safeYaws.empty())
+                if (computeSafeOrientations(n))
                 {
                     n->setType(TraversabilityNodeBase::TRAVERSABLE);
                     n->getUserData().nodeType = NodeType::PARTIALLY_TRAVERSABLE;
-                    n->getUserData().allowedOrientations.clear();
-                    for (double yaw : safeYaws)
-                    {
-                        n->getUserData().allowedOrientations.emplace_back(
-                            base::Angle::fromRad(yaw - M_PI / 8.0), M_PI / 4.0
-                        );
-                    }
                 }
             }
         }
@@ -1471,37 +1485,17 @@ void TraversabilityGenerator3d::inflateObstacles()
                 {
                     if (evaluatedNodes.insert(node).second)
                     {
-                        // Test 4 base yaw orientations + their π-offset mirrors = 8 total
-                        std::vector<double> safeYaws;
-                        for (int i = 0; i < 4; ++i)
-                        {
-                            double yaw = i * (M_PI / 4.0);
-                            if (checkCollisionForYaw(node, yaw))
-                            {
-                                safeYaws.push_back(yaw);
-                                safeYaws.push_back(yaw + M_PI);
-                            }
-                        }
-
-                        if (safeYaws.empty())
-                        {
-                            // No safe orientation found — fully blocked
-                            neighbor->setType(TraversabilityNodeBase::OBSTACLE);
-                            node->getUserData().nodeType = NodeType::INFLATED_OBSTACLE;
-                        }
-                        else
+                        if (computeSafeOrientations(node))
                         {
                             // Some orientations are safe — partially traversable
                             neighbor->setType(TraversabilityNodeBase::TRAVERSABLE);
                             node->getUserData().nodeType = NodeType::PARTIALLY_TRAVERSABLE;
-                            node->getUserData().allowedOrientations.clear();
-                            for (double yaw : safeYaws)
-                            {
-                                // Each safe yaw gets a ±22.5° (π/8) wedge
-                                node->getUserData().allowedOrientations.emplace_back(
-                                    base::Angle::fromRad(yaw - M_PI / 8.0), M_PI / 4.0
-                                );
-                            }
+                        }
+                        else
+                        {
+                            // No safe orientation found — fully blocked
+                            neighbor->setType(TraversabilityNodeBase::OBSTACLE);
+                            node->getUserData().nodeType = NodeType::INFLATED_OBSTACLE;
                         }
                     }
                 }

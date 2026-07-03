@@ -94,6 +94,11 @@ protected:
     /** Check if the robot at a specific yaw orientation collides with MLS patches.
      *  @return true if the yaw is collision-free (safe). */
     bool checkCollisionForYaw(TravGenNode* node, double yaw);
+
+    /** Sample config.numYawSamples yaws over [0,180deg) (mirrored to [180,360)), and if any are
+     *  collision-free, fill node->allowedOrientations with a wedge (width = sampling step) per
+     *  safe yaw. @return true if at least one safe orientation was found. */
+    bool computeSafeOrientations(TravGenNode* node);
     
     /** @return false if no allowed orientation was found (e.g. due to extreme slope)*/
     bool computeAllowedOrientations(TravGenNode* node);

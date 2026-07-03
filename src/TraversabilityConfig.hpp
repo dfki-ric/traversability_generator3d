@@ -43,6 +43,7 @@ public:
         , traverseGravel(true)
         , traverseConcrete(true)
         , articulatedSuspension(true)
+        , numYawSamples(12)
     {};
 
     /** The maximum step height that the robot can traverse.
@@ -116,5 +117,10 @@ public:
     bool traverseGravel;
     bool traverseConcrete;
     bool articulatedSuspension;
+
+    /** Number of yaw samples tested over [0,180deg) when computing the allowed orientations of a
+     *  partially traversable cell (mirrored to [180,360)). Higher = finer angular resolution but
+     *  slower map generation. Step = 180deg / numYawSamples (e.g. 12 -> 15deg). */
+    int numYawSamples;
 };
 }
