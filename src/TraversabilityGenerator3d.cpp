@@ -57,10 +57,21 @@ Polyhedron_3 TraversabilityGenerator3d::generatePolyhedron(const std::vector<Eig
     std::vector<Point_3> cgal_p3;
     cgal_p3.reserve(points.size());
 
-    std::transform(points.begin(), points.end(), std::back_inserter(cgal_p3),
-                   [](const Eigen::Vector3d& v) { return Point_3(v.x(), v.y(), v.z()); });
+    // Only forward finite coordinates to CGAL. CGAL's exact-arithmetic filter
+    // converts every double to a GMP rational via __gmpq_set_d(), which raises
+    // SIGFPE on NaN/Inf. Degenerate/near-vertical MLS patches can produce such
+    // coordinates, so we defensively drop them here.
+    for (const Eigen::Vector3d& v : points)
+    {
+        if (v.allFinite())
+            cgal_p3.emplace_back(v.x(), v.y(), v.z());
+    }
 
     Polyhedron_3 polyhedron;
+    // convex_hull_3 needs at least 4 non-coplanar points to build a volume.
+    if (cgal_p3.size() < 4)
+        return polyhedron;
+
     CGAL::convex_hull_3(cgal_p3.begin(), cgal_p3.end(), polyhedron);
 
     return polyhedron;
@@ -921,7 +932,21 @@ Polyhedron_3 TraversabilityGenerator3d::createPolyhedronFromSurfacePatch(const S
     std::vector<Eigen::Vector3d> polyhedronPoints;
     const double thickness = 0.02;
 
-    if (polygonPoints.size() >= 3)
+    // getPolygon() reconstructs the patch outline from the plane equation
+    // (z = (d - nx*x - ny*y) / nz). For near-vertical/degenerate patches nz -> 0,
+    // yielding non-finite z. Reject such polygons and fall back to the box below,
+    // otherwise the coordinates crash CGAL/GMP with SIGFPE.
+    bool polygonFinite = normalf.allFinite();
+    for (const auto& pt : polygonPoints)
+    {
+        if (!pt.allFinite())
+        {
+            polygonFinite = false;
+            break;
+        }
+    }
+
+    if (polygonPoints.size() >= 3 && polygonFinite)
     {
         polyhedronPoints.reserve(polygonPoints.size() * 2);
         for (const auto& pt : polygonPoints)
