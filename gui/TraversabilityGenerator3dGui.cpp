@@ -12,6 +12,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <pcl/io/ply_io.h>
+#include <pcl/filters/passthrough.h>
 #include <pcl/common/common.h>
 #include <pcl/common/transforms.h>
 #include <base-logging/Logging.hpp>
@@ -223,6 +224,25 @@ void TraversabilityGenerator3dGui::setupUI()
     paramLayout->addWidget(articulatedSuspensionCheck, 5, 0, 1, 2);
 
     layout->addLayout(paramLayout);
+
+    // Height (Z) filter for imported PLY / point clouds. When enabled, points outside
+    // [Z min, Z max] are dropped before the MLS is built, avoiding unnecessary patches.
+    QHBoxLayout* heightFilterLayout = new QHBoxLayout();
+    heightFilterCheck = new QCheckBox("Filter Import by Height (Z)");
+    heightFilterMinSpin = new QDoubleSpinBox();
+    heightFilterMinSpin->setRange(-10000.0, 10000.0);
+    heightFilterMinSpin->setDecimals(2);
+    heightFilterMinSpin->setValue(-1000.0);
+    heightFilterMaxSpin = new QDoubleSpinBox();
+    heightFilterMaxSpin->setRange(-10000.0, 10000.0);
+    heightFilterMaxSpin->setDecimals(2);
+    heightFilterMaxSpin->setValue(1000.0);
+    heightFilterLayout->addWidget(heightFilterCheck);
+    heightFilterLayout->addWidget(new QLabel("Z min (m):"));
+    heightFilterLayout->addWidget(heightFilterMinSpin);
+    heightFilterLayout->addWidget(new QLabel("Z max (m):"));
+    heightFilterLayout->addWidget(heightFilterMaxSpin);
+    layout->addLayout(heightFilterLayout);
 
     resetButton = new QPushButton("Reset Traversability and Soil Maps");
     resetButton->setEnabled(false);
@@ -452,8 +472,24 @@ void TraversabilityGenerator3dGui::loadMls(const std::string& path)
         pcl::PLYReader plyReader;
         if(plyReader.read(path, *cloud) >= 0)
         {
-            pcl::PointXYZ mi, ma; 
-            pcl::getMinMax3D (*cloud, mi, ma); 
+            // Optional height (Z) filtering before building the MLS.
+            if (heightFilterCheck && heightFilterCheck->isChecked())
+            {
+                const double zMin = heightFilterMinSpin->value();
+                const double zMax = heightFilterMaxSpin->value();
+                pcl::PointCloud<pcl::PointXYZ>::Ptr cloudFiltered(new pcl::PointCloud<pcl::PointXYZ>());
+                pcl::PassThrough<pcl::PointXYZ> pass;
+                pass.setInputCloud(cloud);
+                pass.setFilterFieldName("z");
+                pass.setFilterLimits(zMin, zMax);
+                pass.filter(*cloudFiltered);
+                LOG_INFO_S << "Height filter kept " << cloudFiltered->size() << "/" << cloud->size()
+                           << " points in z [" << zMin << ", " << zMax << "]";
+                cloud = cloudFiltered;
+            }
+
+            pcl::PointXYZ mi, ma;
+            pcl::getMinMax3D (*cloud, mi, ma);
             LOG_INFO_S << "MIN: " << mi << ", MAX: " << ma;
 
             const double mls_res = travConfig.gridResolution;
