@@ -1474,17 +1474,17 @@ void TraversabilityGenerator3d::inflateObstacles()
     for (TravGenNode *n : obstacleNodesGrowList)
     {
         // Check the obstacle node itself first to see if any orientation is safe
-        if (n->getType() == TraversabilityNodeBase::OBSTACLE)
-        {
-            if (evaluatedNodes.insert(n).second)
-            {
-                if (computeSafeOrientations(n))
-                {
-                    n->setType(TraversabilityNodeBase::TRAVERSABLE);
-                    n->getUserData().nodeType = NodeType::PARTIALLY_TRAVERSABLE;
-                }
-            }
-        }
+        //if (n->getType() == TraversabilityNodeBase::OBSTACLE)
+        //{
+        //    if (evaluatedNodes.insert(n).second)
+        //    {
+        //        if (computeSafeOrientations(n))
+        //        {
+        //            n->setType(TraversabilityNodeBase::TRAVERSABLE);
+        //            n->getUserData().nodeType = NodeType::PARTIALLY_TRAVERSABLE;
+        //        }
+        //    }
+        //}
 
         const Index nIdx = n->getIndex();
         n->eachConnectedNode([&] (maps::grid::TraversabilityNodeBase *neighbor, bool &expandNode, bool &stop)
