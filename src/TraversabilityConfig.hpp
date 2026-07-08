@@ -44,6 +44,7 @@ public:
         , traverseConcrete(true)
         , articulatedSuspension(true)
         , numYawSamples(12)
+        , useTerrainField(false)
     {};
 
     /** The maximum step height that the robot can traverse.
@@ -122,5 +123,12 @@ public:
      *  partially traversable cell (mirrored to [180,360)). Higher = finer angular resolution but
      *  slower map generation. Step = 180deg / numYawSamples (e.g. 12 -> 15deg). */
     int numYawSamples;
+
+    /** Use the TerrainField pipeline (robust layered ground estimation + exact ESDF
+     *  clearance + analytic allowed orientations) instead of the legacy per-cell
+     *  RANSAC/yaw-sampling generation. Seed-independent full-map generation; the
+     *  expandAll() start positions are ignored. See TERRAIN_FIELD_ARCHITECTURE.md.
+     *  When enabled, numYawSamples and obstacleInflationMultiplier are not used. */
+    bool useTerrainField;
 };
 }

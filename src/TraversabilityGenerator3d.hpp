@@ -80,6 +80,9 @@ protected:
     int currentNodeId = 0; //used while expanding
     int currentSoilNodeId = 0; //used while expanding
 
+    /** TerrainField pipeline: whole map already generated for the current MLS. */
+    bool terrainFieldGenerated = false;
+
     std::vector<TravGenNode *> frontierNodesGrowList;
     
     bool computePlaneRansac(TravGenNode &node);
@@ -162,6 +165,14 @@ public:
     
     /** @param expandDist How far should the map be expanded? If negative the whole map will be expanded. */
     void expandAll(TravGenNode *startNode, const double expandDist);
+
+    /** TerrainField pipeline (config.useTerrainField): seed-independent full-map
+     *  generation via robust layered ground estimation, exact ESDF clearance and
+     *  analytic allowed orientations. Implemented in TerrainFieldPipeline.cpp;
+     *  see TERRAIN_FIELD_ARCHITECTURE.md. Fills trMap with the same TravGenNode
+     *  graph the legacy expansion produces. Idempotent until setMLSGrid() is
+     *  called again. */
+    void expandAllTerrainField();
 
     virtual bool expandNode(TravGenNode *node);
     

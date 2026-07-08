@@ -7,32 +7,43 @@ travConfig:
   initialPatchVariance: 0.0001
 
   # robot dimensions
-  robotHeight: 3.0
+  # TerrainField: robotSizeY/2 = capsule radius (hard clearance, 1.5 m);
+  # sqrt(X^2+Y^2)/2 = rotation-safe radius (3.35 m); robotHeight = body band above
+  # the climbable clearance — structure intruding into [maxStepHeight,
+  # maxStepHeight+robotHeight] above ground blocks the cell.
+  robotHeight: 2.0
   robotSizeX: 6.0
   robotSizeY: 3.0
   distToGround: 0.0
-  articulatedSuspension: true  # if false, the robot is modeled with a rigid chassis/axles
+  articulatedSuspension: false # if false, the robot is modeled with a rigid chassis/axles
+                               # (no effect in the TerrainField pipeline yet)
 
   # slope / terrain constraints
   maxSlope: 0.45                # [rad]
   maxStepHeight: 0.45
-  inclineLimittingMinSlope: 0.2
-  inclineLimittingLimit: 0.1
+  inclineLimittingMinSlope: 0.22
+  inclineLimittingLimit: 0.43
 
   # slope metric
   slopeMetric: "NONE"          # options: NONE, AVG_SLOPE, MAX_SLOPE, TRIANGLE_SLOPE
   slopeMetricScale: 1.0
 
   # traversability estimation
-  costFunctionDist: 0.0
-  minTraversablePercentage: 0.4
+  # TerrainField: costFunctionDist = falloff of the clearance cost term (cells closer
+  # than this to structure cost more -> paths prefer corridor centers). 3.0 ~ the
+  # rotation-safe radius of the 6x3 robot. 0.0 disables the term.
+  costFunctionDist: 3.0
+  # TerrainField: acts as the min-confidence threshold (confidence = measurement
+  # density x fit agreement). Below it a cell is UNKNOWN. 0.3 keeps sparse-but-clean
+  # scan fringes drivable; raise towards 0.5 to be stricter.
+  minTraversablePercentage: 0.3
 
   # movement logic
   allowForwardDownhill: true
   enableInclineLimitting: false
 
-  # soil information
-  useSoilInformation: true
+  # soil information (not consumed by the TerrainField pipeline)
+  useSoilInformation: false
   traverseSand: false
   traverseRocks: false
   traverseGravel: true
@@ -43,4 +54,11 @@ travConfig:
   # is silently clamped and a warning is logged, because the step-height check only
   # searches within min(robotSizeX, robotSizeY)/2 and inflation must cover the rest
   # of the footprint.  Increase above 1.0 for extra safety margins.
+  # NOTE: not used when useTerrainField is true (clearance is exact there).
   obstacleInflationMultiplier: 1.0
+
+  # TerrainField pipeline: robust layered ground estimation + exact ESDF clearance +
+  # analytic allowed orientations (no yaw sampling, no inflation pass). Seed-independent
+  # full-map generation — the picked start position is ignored for expansion.
+  # false = legacy generator. Toggleable live via the GUI checkbox.
+  useTerrainField: true

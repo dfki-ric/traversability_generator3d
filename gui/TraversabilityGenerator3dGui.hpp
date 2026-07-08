@@ -108,6 +108,7 @@ private:
     QCheckBox* traverseGravelCheck = nullptr;
     QCheckBox* traverseConcreteCheck = nullptr;
     QCheckBox* articulatedSuspensionCheck = nullptr;
+    QCheckBox* useTerrainFieldCheck = nullptr;
     QDoubleSpinBox* obstacleInflationMultiplierSpin = nullptr;
 
 };

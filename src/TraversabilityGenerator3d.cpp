@@ -1258,6 +1258,9 @@ void TraversabilityGenerator3d::inflateFrontiers()
 void TraversabilityGenerator3d::setConfig(const TraversabilityConfig &config)
 {
     this->config = config;
+    //config changes (robot size, thresholds, pipeline selection) invalidate a
+    //previously generated TerrainField map
+    terrainFieldGenerated = false;
     trMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
     soilMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
 
@@ -1308,6 +1311,12 @@ void TraversabilityGenerator3d::setConfig(const TraversabilityConfig &config)
 
 void TraversabilityGenerator3d::expandAll(const Eigen::Vector3d& startPos)
 {
+    if(config.useTerrainField)
+    {
+        expandAllTerrainField();
+        return;
+    }
+
     TravGenNode *startNode = generateStartNode(startPos);
 
     expandAll(startNode);
@@ -1315,6 +1324,12 @@ void TraversabilityGenerator3d::expandAll(const Eigen::Vector3d& startPos)
 
 void TraversabilityGenerator3d::expandAll(const std::vector<Eigen::Vector3d>& positions)
 {
+    if(config.useTerrainField)
+    {
+        expandAllTerrainField();
+        return;
+    }
+
     for(const Eigen::Vector3d& pos : positions)
     {
         expandAll(pos);
@@ -1324,6 +1339,13 @@ void TraversabilityGenerator3d::expandAll(const std::vector<Eigen::Vector3d>& po
 
 void TraversabilityGenerator3d::expandAll(const Eigen::Vector3d& startPos, const double expandDist)
 {
+    if(config.useTerrainField)
+    {
+        //TerrainField generation is full-map; the expandDist limitation does not apply.
+        expandAllTerrainField();
+        return;
+    }
+
     TravGenNode *startNode = generateStartNode(startPos);
     expandAll(startNode, expandDist);
 }
@@ -1606,10 +1628,13 @@ void TraversabilityGenerator3d::setMLSGrid(std::shared_ptr< traversability_gener
     trMap.getLocalFrame() = mlsGrid->getLocalFrame();
     
     soilMap.extend(Vector2ui(newSize.x(), newSize.y()));
-    soilMap.getLocalFrame() = mlsGrid->getLocalFrame();   
-    
+    soilMap.getLocalFrame() = mlsGrid->getLocalFrame();
+
     clearTrMap();
     clearSoilMap();
+
+    //new MLS -> the TerrainField map (if used) must be regenerated
+    terrainFieldGenerated = false;
 }
 
 void TraversabilityGenerator3d::clearTrMap()
@@ -1623,6 +1648,11 @@ void TraversabilityGenerator3d::clearTrMap()
 
         l.clear();
     }
+
+    //the map is gone -> a TerrainField generation is required again.
+    //(expandAllTerrainField() itself calls clearTrMap() first and sets the flag
+    //to true at its end, so the order is correct there as well.)
+    terrainFieldGenerated = false;
 }
 
 void TraversabilityGenerator3d::clearSoilMap()

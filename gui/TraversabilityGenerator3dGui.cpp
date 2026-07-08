@@ -223,6 +223,14 @@ void TraversabilityGenerator3dGui::setupUI()
     articulatedSuspensionCheck = new QCheckBox("Articulated Suspension");
     paramLayout->addWidget(articulatedSuspensionCheck, 5, 0, 1, 2);
 
+    useTerrainFieldCheck = new QCheckBox("Use TerrainField Pipeline");
+    useTerrainFieldCheck->setToolTip(
+        "Robust layered ground estimation + exact ESDF clearance + analytic allowed "
+        "orientations (no yaw sampling, no inflation pass). Seed-independent full-map "
+        "generation; the picked start position is ignored for expansion. "
+        "Unchecked = legacy generator. See TERRAIN_FIELD_ARCHITECTURE.md.");
+    paramLayout->addWidget(useTerrainFieldCheck, 5, 2, 1, 2);
+
     layout->addLayout(paramLayout);
 
     // Height (Z) filter for imported PLY / point clouds. When enabled, points outside
@@ -315,7 +323,8 @@ void TraversabilityGenerator3dGui::loadTravConfigFromYaml(const std::string& fil
     travConfig.traverseGravel           = cfg["traverseGravel"].as<bool>();
     travConfig.traverseConcrete         = cfg["traverseConcrete"].as<bool>();
     travConfig.articulatedSuspension    = cfg["articulatedSuspension"] ? cfg["articulatedSuspension"].as<bool>() : true;
-    
+    travConfig.useTerrainField          = cfg["useTerrainField"] ? cfg["useTerrainField"].as<bool>() : false;
+
     travConfig.obstacleInflationMultiplier = cfg["obstacleInflationMultiplier"] ? cfg["obstacleInflationMultiplier"].as<double>() : travConfig.obstacleInflationMultiplier;
 
     // enum
@@ -412,6 +421,10 @@ void TraversabilityGenerator3dGui::loadTravConfigFromYaml(const std::string& fil
     articulatedSuspensionCheck->blockSignals(true);
     articulatedSuspensionCheck->setChecked(travConfig.articulatedSuspension);
     articulatedSuspensionCheck->blockSignals(false);
+
+    useTerrainFieldCheck->blockSignals(true);
+    useTerrainFieldCheck->setChecked(travConfig.useTerrainField);
+    useTerrainFieldCheck->blockSignals(false);
 }
 
 static traversability_generator3d::SoilType soilTypeFromString(const std::string& s)
@@ -601,8 +614,9 @@ void TraversabilityGenerator3dGui::show()
 }
 
 void TraversabilityGenerator3dGui::expandAll()
-{   
-    if(!startPicked) {
+{
+    //TerrainField generation is seed-independent -> no start pose required
+    if(!startPicked && !travConfig.useTerrainField) {
         LOG_WARN_S << "Start pose not picked yet!";
         return;
     }
@@ -738,6 +752,7 @@ void TraversabilityGenerator3dGui::updateConfigFromUI()
     travConfig.traverseGravel           = traverseGravelCheck->isChecked();
     travConfig.traverseConcrete         = traverseConcreteCheck->isChecked();
     travConfig.articulatedSuspension    = articulatedSuspensionCheck->isChecked();
+    travConfig.useTerrainField          = useTerrainFieldCheck->isChecked();
 
     // enum
     std::string s = slopeMetricCombo->currentText().toStdString();
