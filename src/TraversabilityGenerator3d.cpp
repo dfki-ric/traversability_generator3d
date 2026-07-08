@@ -166,7 +166,15 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
     const Eigen::Vector2d& res = mlsGrid->getResolution();
 
 
-    const int patchCntTotal = area.getNumCells().y() * area.getNumCells().x(); //FIXME only works if there is only one patch per cell
+    // number of cells in the search area (density denominator). We count cells that
+    // contribute at least one ground patch, so cells with only walls/overhead don't inflate it.
+    const int patchCntTotal = area.getNumCells().y() * area.getNumCells().x();
+    // Reject patches steeper than maxSlope (walls, curbs): they are not ground and would
+    // otherwise pull the fitted plane. Mirrors the idiom in sampleTerrainHeightAtCorner().
+    const double minVerticalNormalZ = std::cos(config.maxSlope);
+    // Only fit to patches near the node height; the search cuboid is +-maxStepHeight tall,
+    // so a tall patch may merely clip it and inject an outlier far from the ground.
+    const double vertBand = config.maxStepHeight;
     int patchCnt = 0;
     for(size_t y = 0; y < area.getNumCells().y(); y++)
     {
@@ -174,15 +182,27 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
         {
             Eigen::Vector2d pos = Eigen::Vector2d(x,y).cwiseProduct(res) - sizeHalf;
 
-            bool hasPatch = false;
+            bool hasGroundPatch = false;
             for(const MLGrid::PatchType *p : area.at(x, y))
             {
-                PointT pclP(pos.x(), pos.y(), (p->getTop()+p->getBottom())/2.);
-                points->push_back(pclP);
-                hasPatch = true;
+                // Skip near-vertical patches (walls) so they don't contaminate the ground fit.
+                Eigen::Vector3f normalf = p->getNormal();
+                Eigen::Vector3d pnormal(normalf.x(), normalf.y(), normalf.z());
+                if(!pnormal.allFinite())
+                    continue;
+                pnormal.normalize();
+                if(std::abs(pnormal.z()) < minVerticalNormalZ)
+                    continue;
+
+                const double h = (p->getTop() + p->getBottom()) / 2.0;
+                if(std::abs(h - nodePos.z()) > vertBand)
+                    continue;
+
+                points->push_back(PointT(pos.x(), pos.y(), h));
+                hasGroundPatch = true;
             }
 
-            if(hasPatch)
+            if(hasGroundPatch)
                 patchCnt++;
         }
     }
@@ -233,9 +253,27 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
         return false;
     }
 
+    // The dominant plane must explain a sufficient fraction of the ground points. If not,
+    // the search area straddles multiple surfaces (e.g. two levels) and the fit is ambiguous.
+    if (inliers.indices.size() < points->size() * config.minTraversablePercentage) {
+        LOG_DEBUG_S << "TraversabilityGenerator3d: RANSAC plane covers only "
+                    << inliers.indices.size() << "/" << points->size()
+                    << " ground points (" << (100.0 * inliers.indices.size() / points->size())
+                    << "%), minimum required: " << (100.0 * config.minTraversablePercentage) << "%";
+        return false;
+    }
+
     Eigen::Vector3d normal(coefficients.values[0], coefficients.values[1], coefficients.values[2]);
     normal.normalize();
     double distToOrigin = coefficients.values[3];
+
+    // Orient the normal upward so slope = acos(normal . z) stays in [0, pi/2]. RANSAC returns
+    // an arbitrary sign; a downward normal would otherwise yield a bogus > 90 deg slope.
+    if (normal.z() < 0.0)
+    {
+        normal = -normal;
+        distToOrigin = -distToOrigin;
+    }
 
     node.getUserData().plane = Eigen::Hyperplane<double, 3>(normal, distToOrigin);
 
