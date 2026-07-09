@@ -118,7 +118,9 @@ BOOST_FIXTURE_TEST_CASE(check_travmap, TraversabilityGenerator3dTest){
     maps::grid::Index idxInfObstNode;
     travGen->getTraversabilityMap().toGrid(positionInfObst, idxInfObstNode);
     auto inflatedObstacle = travGen->findMatchingTraversabilityPatchAt(idxInfObstNode,0);
-    BOOST_CHECK_EQUAL(inflatedObstacle->getUserData().nodeType, ::traversability_generator3d::NodeType::INFLATED_OBSTACLE);
+    // A traversable neighbour of an obstacle with no collision-free yaw is now marked a plain
+    // OBSTACLE (previously NodeType::INFLATED_OBSTACLE).
+    BOOST_CHECK_EQUAL(inflatedObstacle->getUserData().nodeType, ::traversability_generator3d::NodeType::OBSTACLE);
 
     Eigen::Vector3d positionTrav{0.3, 0.3, 0};
     maps::grid::Index idxTraversableNode;
@@ -314,7 +316,7 @@ BOOST_FIXTURE_TEST_CASE(check_obstacle_inflation_via_expand, TraversabilityGener
     for(auto* n : travGen->getTraversabilityMap().at(idx))
     {
         BOOST_CHECK(n->getType() == TraversabilityNodeBase::OBSTACLE ||
-                    n->getUserData().nodeType == traversability_generator3d::NodeType::INFLATED_OBSTACLE);
+                    n->getUserData().nodeType == traversability_generator3d::NodeType::OBSTACLE);
     }
     delete travGen;
 }

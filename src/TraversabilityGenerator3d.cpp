@@ -171,10 +171,12 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
     const int patchCntTotal = area.getNumCells().y() * area.getNumCells().x();
     // Reject patches steeper than maxSlope (walls, curbs): they are not ground and would
     // otherwise pull the fitted plane. Mirrors the idiom in sampleTerrainHeightAtCorner().
+    // NOTE: we deliberately do NOT gate patches by height around the node's *tentative*
+    // height here -- RANSAC is what determines the plane/height, and pre-filtering to a
+    // narrow band breaks hole-filling and slope fits (leaves UNKNOWN holes). The search
+    // cuboid already bounds z to +-maxStepHeight, and RANSAC's inlier threshold rejects
+    // the remaining outliers.
     const double minVerticalNormalZ = std::cos(config.maxSlope);
-    // Only fit to patches near the node height; the search cuboid is +-maxStepHeight tall,
-    // so a tall patch may merely clip it and inject an outlier far from the ground.
-    const double vertBand = config.maxStepHeight;
     int patchCnt = 0;
     for(size_t y = 0; y < area.getNumCells().y(); y++)
     {
@@ -195,9 +197,6 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
                     continue;
 
                 const double h = (p->getTop() + p->getBottom()) / 2.0;
-                if(std::abs(h - nodePos.z()) > vertBand)
-                    continue;
-
                 points->push_back(PointT(pos.x(), pos.y(), h));
                 hasGroundPatch = true;
             }
@@ -250,16 +249,6 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
     if (inliers.indices.size() <= 5) {
         LOG_DEBUG_S << "TraversabilityGenerator3d: RANSAC failed: only " << inliers.indices.size()
                     << " inliers found (minimum required: 6)";
-        return false;
-    }
-
-    // The dominant plane must explain a sufficient fraction of the ground points. If not,
-    // the search area straddles multiple surfaces (e.g. two levels) and the fit is ambiguous.
-    if (inliers.indices.size() < points->size() * config.minTraversablePercentage) {
-        LOG_DEBUG_S << "TraversabilityGenerator3d: RANSAC plane covers only "
-                    << inliers.indices.size() << "/" << points->size()
-                    << " ground points (" << (100.0 * inliers.indices.size() / points->size())
-                    << "%), minimum required: " << (100.0 * config.minTraversablePercentage) << "%";
         return false;
     }
 
@@ -1556,9 +1545,10 @@ void TraversabilityGenerator3d::inflateObstacles()
                         }
                         else
                         {
-                            // No safe orientation found — fully blocked
+                            // No safe orientation found: the robot cannot occupy this cell at
+                            // any yaw, so it is a plain obstacle (not merely footprint-inflated).
                             neighbor->setType(TraversabilityNodeBase::OBSTACLE);
-                            node->getUserData().nodeType = NodeType::INFLATED_OBSTACLE;
+                            node->getUserData().nodeType = NodeType::OBSTACLE;
                         }
                     }
                 }
@@ -1738,9 +1728,15 @@ SoilNode* TraversabilityGenerator3d::generateStartSoilNode(const Eigen::Vector3d
 
 bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
 {
-    Eigen::Vector3d nodePos = node->getPosition(trMap);
-    SoilNode *soilNode = generateStartSoilNode(nodePos);
-    
+    // Populate the soil map alongside expansion only when soil information is actually used.
+    // Otherwise this allocates and inserts a SoilNode for every expanded cell into a map that
+    // nothing consumes (the soil pipeline in the GUI is itself gated on useSoilInformation).
+    if(config.useSoilInformation)
+    {
+        const Eigen::Vector3d nodePos = node->getPosition(trMap);
+        generateStartSoilNode(nodePos);
+    }
+
     node->setExpanded();
     if(node->getType() == TraversabilityNodeBase::UNKNOWN)
     {
