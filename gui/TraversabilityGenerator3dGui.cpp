@@ -223,6 +223,10 @@ void TraversabilityGenerator3dGui::setupUI()
     articulatedSuspensionCheck = new QCheckBox("Articulated Suspension");
     paramLayout->addWidget(articulatedSuspensionCheck, 5, 0, 1, 2);
 
+    robustPlaneFitCheck = new QCheckBox("Robust Plane Fit (no RANSAC)");
+    robustPlaneFitCheck->setToolTip("Deterministic median/MAD-based plane fit instead of RANSAC");
+    paramLayout->addWidget(robustPlaneFitCheck, 5, 2, 1, 2);
+
     layout->addLayout(paramLayout);
 
     // Height (Z) filter for imported PLY / point clouds. When enabled, points outside
@@ -281,6 +285,7 @@ void TraversabilityGenerator3dGui::setupUI()
     connect(traverseGravelCheck, SIGNAL(toggled(bool)), this, SLOT(updateConfigFromUI()));
     connect(traverseConcreteCheck, SIGNAL(toggled(bool)), this, SLOT(updateConfigFromUI()));
     connect(articulatedSuspensionCheck, SIGNAL(toggled(bool)), this, SLOT(updateConfigFromUI()));
+    connect(robustPlaneFitCheck, SIGNAL(toggled(bool)), this, SLOT(updateConfigFromUI()));
 }
 
 void TraversabilityGenerator3dGui::loadTravConfigFromYaml(const std::string& file)
@@ -315,6 +320,7 @@ void TraversabilityGenerator3dGui::loadTravConfigFromYaml(const std::string& fil
     travConfig.traverseGravel           = cfg["traverseGravel"].as<bool>();
     travConfig.traverseConcrete         = cfg["traverseConcrete"].as<bool>();
     travConfig.articulatedSuspension    = cfg["articulatedSuspension"] ? cfg["articulatedSuspension"].as<bool>() : true;
+    travConfig.useRobustPlaneFit        = cfg["useRobustPlaneFit"] ? cfg["useRobustPlaneFit"].as<bool>() : false;
     
     travConfig.obstacleInflationMultiplier = cfg["obstacleInflationMultiplier"] ? cfg["obstacleInflationMultiplier"].as<double>() : travConfig.obstacleInflationMultiplier;
 
@@ -412,6 +418,10 @@ void TraversabilityGenerator3dGui::loadTravConfigFromYaml(const std::string& fil
     articulatedSuspensionCheck->blockSignals(true);
     articulatedSuspensionCheck->setChecked(travConfig.articulatedSuspension);
     articulatedSuspensionCheck->blockSignals(false);
+
+    robustPlaneFitCheck->blockSignals(true);
+    robustPlaneFitCheck->setChecked(travConfig.useRobustPlaneFit);
+    robustPlaneFitCheck->blockSignals(false);
 }
 
 static traversability_generator3d::SoilType soilTypeFromString(const std::string& s)
@@ -738,6 +748,7 @@ void TraversabilityGenerator3dGui::updateConfigFromUI()
     travConfig.traverseGravel           = traverseGravelCheck->isChecked();
     travConfig.traverseConcrete         = traverseConcreteCheck->isChecked();
     travConfig.articulatedSuspension    = articulatedSuspensionCheck->isChecked();
+    travConfig.useRobustPlaneFit        = robustPlaneFitCheck->isChecked();
 
     // enum
     std::string s = slopeMetricCombo->currentText().toStdString();

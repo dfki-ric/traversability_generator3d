@@ -3,7 +3,7 @@
 travConfig:
 
   # grid
-  gridResolution: 1.0
+  gridResolution: 0.5
   initialPatchVariance: 0.0001
 
   # robot dimensions
@@ -26,6 +26,10 @@ travConfig:
   # traversability estimation
   costFunctionDist: 0.0
   minTraversablePercentage: 0.4
+  # if true, patch creation uses the deterministic robust plane fit (median/MAD +
+  # total-least-squares) instead of RANSAC. Toggle "Robust Plane Fit (no RANSAC)"
+  # in the GUI to A/B against the RANSAC path.
+  useRobustPlaneFit: true
 
   # movement logic
   allowForwardDownhill: true

@@ -73,6 +73,11 @@ protected:
     double patchRadius;
 
     std::vector<TravGenNode*> obstacleNodesGrowList;
+
+    /** Nodes typed OBSTACLE because their plane fit failed (unmeasured cells). Tracked
+     *  separately so fillEnclosedUnknownRegions() can tell them apart from real
+     *  obstacles; consumed by each fill pass, cleared in clearTrMap(). */
+    std::vector<TravGenNode*> unmeasuredNodesList;
     
     maps::grid::TraversabilityMap3d<TravGenNode*> trMap;
     maps::grid::TraversabilityMap3d<SoilNode*> soilMap;
@@ -83,6 +88,11 @@ protected:
     std::vector<TravGenNode *> frontierNodesGrowList;
     
     bool computePlaneRansac(TravGenNode &node);
+
+    /** Deterministic alternative to computePlaneRansac (config.useRobustPlaneFit):
+     *  thickness-based wall reject -> height-consensus (median) -> total-least-squares
+     *  plane with two fixed Tukey/MAD reweighted refits. Fills the same node fields. */
+    bool computePlaneRobust(TravGenNode &node);
     Eigen::Vector3d computeContactPlaneFromCorners(const std::vector<Eigen::Vector3d>& cornerPositions);
     std::vector<Eigen::Vector3d> compute4PointContactPositions(const Eigen::Vector3d& nodePos);
     double computeSlope(const Eigen::Hyperplane< double, int(3) >& plane) const;
@@ -118,6 +128,14 @@ protected:
     void inflateFrontiers();
 
     void inflateObstacles();
+
+    /** Re-expands interior (fully enclosed) unmeasured pockets -- tracked in
+     *  unmeasuredNodesList -- with the local-evidence gate bypassed. Unmeasured cells at
+     *  the outer map edge (and pockets wider than the fit's search radius) stay OBSTACLE. */
+    void fillEnclosedUnknownRegions();
+
+    /** Set while fillEnclosedUnknownRegions() re-expands enclosed pockets. */
+    bool bypassLocalEvidenceGate = false;
     
     TraversabilityConfig config;
     

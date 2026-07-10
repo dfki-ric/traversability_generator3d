@@ -7,6 +7,9 @@
 #include <vizkit3d_debug_drawings/DebugDrawingColors.hpp>
 
 #include <deque>
+#include <algorithm>
+#include <limits>
+#include <Eigen/Eigenvalues>
 using namespace maps::grid;
 
 namespace traversability_generator3d
@@ -295,6 +298,263 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
 //        V3DD::DRAW_TEXT("slope", pos, std::to_string(node.getUserData().slope), 0.01, V3DD::Color::red);
 //    });
 //#endif
+
+    return true;
+}
+
+bool TraversabilityGenerator3d::computePlaneRobust(TravGenNode& node)
+{
+    // Deterministic alternative to computePlaneRansac (config.useRobustPlaneFit).
+    // Pipeline: thickness-based wall reject -> height consensus around the data median ->
+    // total-least-squares plane with two fixed Tukey/MAD reweighted refits. Rank statistics
+    // (median, MAD) give a high breakdown point without randomness: the same input always
+    // produces the identical plane. Fills the same node fields as computePlaneRansac.
+    Eigen::Vector3d nodePos;
+    if (!trMap.fromGrid(node.getIndex(), nodePos, node.getHeight())) {
+        LOG_ERROR_S << "TraversabilityGenerator3d: Node index " << node.getIndex()
+                    << " with height " << node.getHeight()
+                    << " is outside of the traversability grid.";
+        return false;
+    }
+
+    // Local-evidence gate: this cell may only become a trav patch if the cell itself or its
+    // immediate neighbourhood (one travmap cell ring) contains at least one ground-like MLS
+    // patch within +-maxStepHeight. Without it, the interpolated hole-filling candidate in
+    // createTraversabilityPatchAt combined with the footprint-sized fit lets the expansion
+    // carpet large data-free areas (e.g. under tree canopies) from a handful of far-away
+    // returns -- each accepted cell re-centres the search cube and the sprawl continues.
+    // One-cell holes still fill; multi-cell interpolation sprawl stops immediately.
+    // (fillEnclosedUnknownRegions() bypasses this gate when refilling interior pockets.)
+    if(!bypassLocalEvidenceGate)
+    {
+        const double evidenceHalfWidth = 1.5 * config.gridResolution;
+        Eigen::Vector3d evMin(-evidenceHalfWidth, -evidenceHalfWidth, -config.maxStepHeight);
+        Eigen::Vector3d evMax(-evMin);
+        evMin += nodePos;
+        evMax += nodePos;
+        View evArea = mlsGrid->intersectCuboid(Eigen::AlignedBox3d(evMin, evMax));
+        bool hasLocalEvidence = false;
+        for(size_t y = 0; y < evArea.getNumCells().y() && !hasLocalEvidence; y++)
+        {
+            for(size_t x = 0; x < evArea.getNumCells().x() && !hasLocalEvidence; x++)
+            {
+                for(const MLGrid::PatchType* p : evArea.at(x, y))
+                {
+                    // Ground-like: not a wall/pole remnant (same thickness rule as below).
+                    if((p->getTop() - p->getBottom()) <= config.maxStepHeight)
+                    {
+                        hasLocalEvidence = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if(!hasLocalEvidence)
+        {
+            LOG_DEBUG_S << "TraversabilityGenerator3d: robust plane fit skipped: no ground-like "
+                        << "MLS patch within one cell ring of the node (interpolation-only cell)";
+            return false;
+        }
+    }
+
+    const double growSize = std::min(config.robotSizeX, config.robotSizeY) / 2.0;
+    const double minVerticalNormalZ = std::cos(config.maxSlope);
+
+    // Collect candidate ground points (xy relative to the cell centre, z absolute) -- the
+    // same frame computePlaneRansac uses, so the height adjustment below stays identical.
+    auto collectPoints = [&](const double halfWidth, std::vector<Eigen::Vector3d>& out)
+    {
+        out.clear();
+        Eigen::Vector3d min(-halfWidth, -halfWidth, -config.maxStepHeight);
+        Eigen::Vector3d max(-min);
+        min += nodePos;
+        max += nodePos;
+        View area = mlsGrid->intersectCuboid(Eigen::AlignedBox3d(min, max));
+
+        const Eigen::Vector2d sizeHalf(area.getSize() / 2.0);
+        const Eigen::Vector2d& res = mlsGrid->getResolution();
+        for(size_t y = 0; y < area.getNumCells().y(); y++)
+        {
+            for(size_t x = 0; x < area.getNumCells().x(); x++)
+            {
+                const Eigen::Vector2d pos = Eigen::Vector2d(x, y).cwiseProduct(res) - sizeHalf;
+                for(const MLGrid::PatchType* p : area.at(x, y))
+                {
+                    // A patch spanning more than a step height within a single cell is
+                    // vertical structure (wall, pole). Thickness is a positional signal:
+                    // it stays valid even when the patch normal is unreliable, so
+                    // tilted-but-ground patches are never rejected here.
+                    const double thickness = p->getTop() - p->getBottom();
+                    if(thickness > config.maxStepHeight)
+                        continue;
+
+                    // Secondary wall vote: reject only when two independent signals agree
+                    // (near-horizontal normal AND substantial thickness). Never on the
+                    // normal alone -- ground patches can carry junk normals.
+                    Eigen::Vector3f nf = p->getNormal();
+                    Eigen::Vector3d pn(nf.x(), nf.y(), nf.z());
+                    if(pn.allFinite() && pn.squaredNorm() > 1e-12)
+                    {
+                        pn.normalize();
+                        if(std::abs(pn.z()) < minVerticalNormalZ && thickness > 0.5 * config.maxStepHeight)
+                            continue;
+                    }
+
+                    out.emplace_back(pos.x(), pos.y(), (p->getTop() + p->getBottom()) / 2.0);
+                }
+            }
+        }
+    };
+
+    auto medianOf = [](std::vector<double> v) -> double
+    {
+        const size_t mid = v.size() / 2;
+        std::nth_element(v.begin(), v.begin() + mid, v.end());
+        return v[mid];
+    };
+
+    // Height consensus: keep points near the *data* median, not the node's tentative
+    // height (filtering against the tentative height starves hole filling -- that was
+    // the reverted band-gate regression). The band grows with maxSlope so legitimate
+    // height variation across a sloped footprint stays inside; wall remnants and other
+    // levels fall outside. On a two-level cell the median lands in the cluster with
+    // more support, i.e. the dominant surface -- deterministically.
+    const double band = growSize * std::tan(config.maxSlope) + config.maxStepHeight;
+    auto heightConsensus = [&](const std::vector<Eigen::Vector3d>& in, std::vector<Eigen::Vector3d>& out) -> double
+    {
+        out.clear();
+        if(in.empty())
+            return std::numeric_limits<double>::quiet_NaN();
+        std::vector<double> heights;
+        heights.reserve(in.size());
+        for(const Eigen::Vector3d& pt : in)
+            heights.push_back(pt.z());
+        const double med = medianOf(heights);
+        for(const Eigen::Vector3d& pt : in)
+        {
+            if(std::abs(pt.z() - med) <= band)
+                out.push_back(pt);
+        }
+        return med;
+    };
+
+    std::vector<Eigen::Vector3d> raw, points;
+    collectPoints(growSize, raw);
+    double consensusMedian = heightConsensus(raw, points);
+
+    // Sparse MLS: widen the search once (deterministically) instead of giving up.
+    if(points.size() < 5)
+    {
+        collectPoints(growSize * 1.5, raw);
+        consensusMedian = heightConsensus(raw, points);
+        if(points.size() < 5)
+        {
+            LOG_DEBUG_S << "TraversabilityGenerator3d: robust plane fit skipped: only "
+                        << points.size() << " ground points after consensus (minimum: 5)";
+            return false;
+        }
+    }
+
+    // Total-least-squares plane, then two Tukey-reweighted refits. The outlier scale comes
+    // from the MAD of the residuals, so it adapts to the map's actual noise instead of a
+    // hard-coded threshold. Fixed pass count keeps it deterministic.
+    //
+    // Leverage guard: the IRLS weights are *initialised* from the height distribution around
+    // the consensus median rather than starting uniform. A coherent in-band outlier cluster
+    // (e.g. curb remnants below the thickness filter) can tilt an unweighted first fit so far
+    // that two refits cannot recover; height-based initial weights are immune to that leverage,
+    // while the generous Tukey cutoff (~4.7 sigma) keeps legitimate slope points in play.
+    std::vector<double> weights(points.size(), 1.0);
+    {
+        std::vector<double> absDev(points.size());
+        for(size_t i = 0; i < points.size(); i++)
+            absDev[i] = std::abs(points[i].z() - consensusMedian);
+        const double scale = std::max(1.4826 * medianOf(absDev), 1e-3);
+        const double cutoff = 4.685 * scale;
+        for(size_t i = 0; i < points.size(); i++)
+        {
+            const double u = absDev[i] / cutoff;
+            weights[i] = (u < 1.0) ? (1.0 - u * u) * (1.0 - u * u) : 0.0;
+        }
+    }
+    Eigen::Vector3d normal(Eigen::Vector3d::UnitZ());
+    Eigen::Vector3d centroid(Eigen::Vector3d::Zero());
+    bool haveFit = false;
+    for(int pass = 0; pass < 3; pass++)
+    {
+        double wSum = 0.0;
+        size_t support = 0;
+        Eigen::Vector3d c(Eigen::Vector3d::Zero());
+        for(size_t i = 0; i < points.size(); i++)
+        {
+            c += weights[i] * points[i];
+            wSum += weights[i];
+            if(weights[i] > 0.0)
+                support++;
+        }
+        if(support < 3 || wSum <= 0.0)
+            break;  // weights collapsed; keep the previous pass's fit
+        c /= wSum;
+
+        Eigen::Matrix3d cov(Eigen::Matrix3d::Zero());
+        for(size_t i = 0; i < points.size(); i++)
+        {
+            const Eigen::Vector3d d = points[i] - c;
+            cov += weights[i] * (d * d.transpose());
+        }
+
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> solver(cov);
+        if(solver.info() != Eigen::Success)
+            break;
+        // A plane needs spread in two directions; a single MLS column has none.
+        if(solver.eigenvalues()(1) <= 1e-12)
+            break;
+
+        normal = solver.eigenvectors().col(0).normalized();
+        centroid = c;
+        haveFit = true;
+        if(pass == 2)
+            break;
+
+        std::vector<double> absResiduals(points.size());
+        for(size_t i = 0; i < points.size(); i++)
+            absResiduals[i] = std::abs(normal.dot(points[i] - centroid));
+        // 1.4826 * MAD estimates the noise sigma; floor it so perfectly flat synthetic
+        // data does not collapse the scale to zero.
+        const double scale = std::max(1.4826 * medianOf(absResiduals), 1e-3);
+        const double cutoff = 4.685 * scale;  // standard Tukey tuning constant
+        for(size_t i = 0; i < points.size(); i++)
+        {
+            const double u = absResiduals[i] / cutoff;
+            weights[i] = (u < 1.0) ? (1.0 - u * u) * (1.0 - u * u) : 0.0;
+        }
+    }
+
+    if(!haveFit)
+    {
+        LOG_DEBUG_S << "TraversabilityGenerator3d: robust plane fit failed: degenerate point set";
+        return false;
+    }
+
+    // Keep the normal pointing up so slope = acos(normal . z) stays in [0, pi/2].
+    if(normal.z() < 0.0)
+        normal = -normal;
+    if(normal.z() < 1e-6)
+        return false;  // (near-)vertical consensus plane -- not ground
+
+    // Plane in the cell-local frame; height of the plane at the cell centre (x = y = 0).
+    const double offset = -normal.dot(centroid);
+    const double newHeight = -offset / normal.z();
+    if(!std::isfinite(newHeight))
+        return false;
+
+    node.getUserData().plane = Eigen::Hyperplane<double, 3>(normal, offset);
+    node.setHeight(newHeight);
+
+    const Eigen::Vector3d slopeDir = computeSlopeDirection(node.getUserData().plane);
+    node.getUserData().slope = computeSlope(node.getUserData().plane);
+    node.getUserData().slopeDirection = slopeDir;
+    node.getUserData().slopeDirectionAtan2 = std::atan2(slopeDir.y(), slopeDir.x());
 
     return true;
 }
@@ -1256,6 +1516,11 @@ void TraversabilityGenerator3d::inflateFrontiers()
 
     for(TravGenNode *n : frontierNodesGrowList)
     {
+        // fillEnclosedUnknownRegions() may have retyped a former frontier to TRAVERSABLE
+        // (its pocket got filled) -- such nodes must not seed frontier inflation anymore.
+        if(n->getType() != TraversabilityNodeBase::FRONTIER)
+            continue;
+
         Eigen::Vector3d nodePos = n ->getPosition(trMap);
 
         n->eachConnectedNode([&](maps::grid::TraversabilityNodeBase *neighbor, bool &expandNode, bool &stop)
@@ -1280,6 +1545,130 @@ void TraversabilityGenerator3d::inflateFrontiers()
     }
 
     frontierNodesGrowList.clear();
+}
+
+void TraversabilityGenerator3d::fillEnclosedUnknownRegions()
+{
+    // Unmeasured cells are typed OBSTACLE at creation (tracked in unmeasuredNodesList).
+    // Interior occlusion pockets (scan shadows, holes in the point cloud) that are fully
+    // enclosed by mapped terrain are re-expanded here with the local-evidence gate
+    // bypassed, i.e. interpolated from the surrounding measured ground -- still passing
+    // the normal slope and step checks. Unmeasured cells at the outer map edge, and
+    // pockets wider than the plane fit's search radius, remain OBSTACLE: unmeasured
+    // space is not traversable.
+    const Vector2ui numCells = trMap.getNumCells();
+    if(numCells.x() == 0 || numCells.y() == 0)
+        return;
+    const int sizeX = static_cast<int>(numCells.x());
+    const int sizeY = static_cast<int>(numCells.y());
+
+    // 2D mask: does a cell contain any node (on any level)?
+    std::vector<uint8_t> hasNode(static_cast<size_t>(sizeX) * sizeY, 0);
+    for(int y = 0; y < sizeY; y++)
+        for(int x = 0; x < sizeX; x++)
+            if(!trMap.at(x, y).empty())
+                hasNode[static_cast<size_t>(y) * sizeX + x] = 1;
+
+    // Flood-fill from the grid border over node-less cells: exterior emptiness.
+    std::vector<uint8_t> exteriorEmpty(static_cast<size_t>(sizeX) * sizeY, 0);
+    std::deque<std::pair<int, int>> flood;
+    auto pushEmpty = [&](int x, int y)
+    {
+        if(x < 0 || y < 0 || x >= sizeX || y >= sizeY)
+            return;
+        const size_t i = static_cast<size_t>(y) * sizeX + x;
+        if(hasNode[i] || exteriorEmpty[i])
+            return;
+        exteriorEmpty[i] = 1;
+        flood.emplace_back(x, y);
+    };
+    for(int x = 0; x < sizeX; x++) { pushEmpty(x, 0); pushEmpty(x, sizeY - 1); }
+    for(int y = 0; y < sizeY; y++) { pushEmpty(0, y); pushEmpty(sizeX - 1, y); }
+    while(!flood.empty())
+    {
+        const std::pair<int, int> c = flood.front();
+        flood.pop_front();
+        pushEmpty(c.first + 1, c.second);
+        pushEmpty(c.first - 1, c.second);
+        pushEmpty(c.first, c.second + 1);
+        pushEmpty(c.first, c.second - 1);
+    }
+
+    // An unmeasured node is a genuine edge node iff it sits on the grid border or is
+    // 8-adjacent to exterior emptiness. Everything else rims an interior pocket.
+    std::deque<TravGenNode*> pocketNodes;
+    for(TravGenNode* n : unmeasuredNodesList)
+    {
+        if(n->getUserData().nodeType != NodeType::OBSTACLE)
+            continue;  // already refilled in an earlier pass
+        const int x = n->getIndex().x();
+        const int y = n->getIndex().y();
+        bool edge = (x == 0 || y == 0 || x == sizeX - 1 || y == sizeY - 1);
+        for(int dy = -1; dy <= 1 && !edge; dy++)
+        {
+            for(int dx = -1; dx <= 1 && !edge; dx++)
+            {
+                const int nx = x + dx;
+                const int ny = y + dy;
+                if(nx < 0 || ny < 0 || nx >= sizeX || ny >= sizeY)
+                    continue;
+                if(exteriorEmpty[static_cast<size_t>(ny) * sizeX + nx])
+                    edge = true;
+            }
+        }
+        if(!edge)
+            pocketNodes.push_back(n);
+    }
+    // Entries are consumed by this pass: edge nodes simply stay OBSTACLE, refit failures
+    // below re-register themselves for the next pass via createTraversabilityPatchAt.
+    unmeasuredNodesList.clear();
+
+    if(pocketNodes.empty())
+        return;
+
+    LOG_INFO_S << "TraversabilityGenerator3d: re-expanding " << pocketNodes.size()
+               << " interior unmeasured nodes (enclosed pockets)";
+
+    // Re-fit the pocket rim with the evidence gate bypassed, then re-run the expansion
+    // loop so the flood fills the pocket interior. The re-expansion cannot escape the
+    // pocket: every node surrounding it is already expanded.
+    bypassLocalEvidenceGate = true;
+    std::deque<TravGenNode*> candidates;
+    for(TravGenNode* node : pocketNodes)
+    {
+        const float oldHeight = node->getHeight();
+        node->setType(TraversabilityNodeBase::UNSET);
+        node->getUserData().nodeType = NodeType::UNSET;
+        const bool fitOk = config.useRobustPlaneFit ? computePlaneRobust(*node)
+                                                    : computePlaneRansac(*node);
+        // Keep the creation-time (interpolated) height: the node already sits in its
+        // height-ordered level list, so it must not move vertically after insertion.
+        node->setHeight(oldHeight);
+        if(!fitOk)
+        {
+            node->setType(TraversabilityNodeBase::OBSTACLE);
+            node->getUserData().nodeType = NodeType::OBSTACLE;
+            continue;
+        }
+        node->setNotExpanded();
+        candidates.push_back(node);
+    }
+
+    while(!candidates.empty())
+    {
+        TravGenNode* node = candidates.front();
+        candidates.pop_front();
+        if(node->isExpanded())
+            continue;
+        if(!expandNode(node))
+            continue;
+        for(auto* n : node->getConnections())
+        {
+            if(!n->isExpanded())
+                candidates.push_back(static_cast<TravGenNode*>(n));
+        }
+    }
+    bypassLocalEvidenceGate = false;
 }
 
 void TraversabilityGenerator3d::setConfig(const TraversabilityConfig &config)
@@ -1410,6 +1799,7 @@ void TraversabilityGenerator3d::expandAll(TravGenNode* startNode, const double e
         }
     }
 
+    fillEnclosedUnknownRegions();
     inflateFrontiers();
     inflateObstacles();
 
@@ -1500,6 +1890,11 @@ void TraversabilityGenerator3d::inflateObstacles()
 
     for (TravGenNode *n : obstacleNodesGrowList)
     {
+        // fillEnclosedUnknownRegions() may have refilled a former unmeasured obstacle to
+        // TRAVERSABLE -- such nodes must not seed obstacle inflation anymore.
+        if(n->getType() != TraversabilityNodeBase::OBSTACLE)
+            continue;
+
         // Check the obstacle node itself first to see if any orientation is safe
         //if (n->getType() == TraversabilityNodeBase::OBSTACLE)
         //{
@@ -1642,6 +2037,7 @@ void TraversabilityGenerator3d::setMLSGrid(std::shared_ptr< traversability_gener
 
 void TraversabilityGenerator3d::clearTrMap()
 {
+    unmeasuredNodesList.clear();
     for(LevelList<TravGenNode *> &l : trMap)
     {
         for(TravGenNode *n : l)
@@ -1872,20 +2268,25 @@ TravGenNode *TraversabilityGenerator3d::createTraversabilityPatchAt(maps::grid::
         ret->getUserData().nodeType = NodeType::UNSET;
 
         //there is a neighboring patch in the mls that has a reachable hight
-        if(!computePlaneRansac(*ret))
+        const bool planeOk = config.useRobustPlaneFit ? computePlaneRobust(*ret)
+                                                      : computePlaneRansac(*ret);
+        if(!planeOk)
         {
-            if(mlsIdx.x() == 1 || mlsIdx.y() == 1) {
-                ret->setType(TraversabilityNodeBase::OBSTACLE);
-                ret->getUserData().nodeType = NodeType::OBSTACLE;
-            } else {
-                ret->setType(TraversabilityNodeBase::UNKNOWN);
-                ret->getUserData().nodeType = NodeType::UNKNOWN;
-            }
+            // Unmeasured / unfittable cells become obstacles immediately -- there is no
+            // UNKNOWN state anymore. checkForFrontier() therefore never sees UNKNOWN
+            // neighbours, so no FRONTIER / INFLATED_FRONTIER rings form around unmeasured
+            // space. The nodes are remembered in unmeasuredNodesList so that
+            // fillEnclosedUnknownRegions() can still refill interior pockets (by type
+            // alone they are indistinguishable from real obstacles).
+            ret->setType(TraversabilityNodeBase::OBSTACLE);
+            ret->getUserData().nodeType = NodeType::OBSTACLE;
         }
 
         if((ret->getHeight() - config.maxStepHeight) <= curHeight && (ret->getHeight() + config.maxStepHeight) >= curHeight)
         {
             trMap.at(idx).insert(ret);
+            if(!planeOk)
+                unmeasuredNodesList.push_back(ret);
             return ret;
         }
         else
