@@ -917,13 +917,14 @@ bool TraversabilityGenerator3d::checkStepHeightAABB(TravGenNode *node)
     if(area.getNumCells().y() <= 0 || area.getNumCells().x() <= 0)
         return true;
 
-    //intersectCuboid returns an area that is one patch bigger than requested. I.e.
-    //it interpretes both min and max as inclusive. However, we consider max to be exclusive and
-    //thus reduce the cell count by one
-    for(size_t y = 0; y < area.getNumCells().y() - 1; y++, curIndex.y() += 1)
+    //Iterate ALL cells of the view: the old "-1" bounds (justified by intersectCuboid's
+    //inclusive max) silently skipped the last row/column of patches inside the footprint.
+    //For a collision check the conservative direction is inclusion -- an extra boundary
+    //cell only costs one more test.
+    for(size_t y = 0; y < area.getNumCells().y(); y++, curIndex.y() += 1)
     {
         curIndex.x() = minIdx.x();
-        for(size_t x = 0; x < area.getNumCells().x() - 1; x++, curIndex.x() += 1)
+        for(size_t x = 0; x < area.getNumCells().x(); x++, curIndex.x() += 1)
         {
             Eigen::Vector3d pos;
             // Convert grid index directly to world coordinates
@@ -965,32 +966,35 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
     }
     nodePos.z() += node->getHeight();
 
-    // Get 4 corner positions based on local terrain heights
-    std::vector<Eigen::Vector3d> cornerPositions = compute4PointContactPositions(nodePos);
-    
-    if(cornerPositions.size() != 4)
-    {
-        LOG_WARN_S << "compute4PointContactPositions returned " << cornerPositions.size() << " corners instead of 4";
-        return true;
-    }
-    
-    // Compute contact plane normal from 4 corners
-    Eigen::Vector3d contactNormal = computeContactPlaneFromCorners(cornerPositions);
-    
-    // Use contact normal directly for height offset - robot tilts to match terrain slope
-    Eigen::Vector3d heightOffset = contactNormal * config.robotHeight;
-
-    std::vector<Eigen::Vector3d> bottomCorners;
-    if (config.articulatedSuspension)
-    {
-        bottomCorners = cornerPositions;
-    }
+    // Reference surface: the node's fitted ground plane (see checkCollisionForYaw for the
+    // rationale -- sampling "terrain" under the corners could hoist the modelled body onto
+    // the very obstacle it should collide with).
+    Eigen::Vector3d planeNormal = node->getUserData().plane.normal();
+    if (!planeNormal.allFinite() || planeNormal.norm() < 1e-6 || std::abs(planeNormal.z()) < 1e-6)
+        planeNormal = Eigen::Vector3d::UnitZ();
     else
     {
-        bottomCorners = computeRigidRobotCorners(cornerPositions, contactNormal, 0.0, nodePos);
+        planeNormal.normalize();
+        if (planeNormal.z() < 0.0)
+            planeNormal = -planeNormal;
     }
+    //ground plane z at an xy offset from the node centre (the plane passes through nodePos)
+    auto planeZAt = [&](double dx, double dy)
+    {
+        return nodePos.z() - (planeNormal.x() * dx + planeNormal.y() * dy) / planeNormal.z();
+    };
 
-    // Build robot edges from 4-point contact geometry:
+    const double chx = config.robotSizeX / 2.0;
+    const double chy = config.robotSizeY / 2.0;
+    std::vector<Eigen::Vector3d> bottomCorners = {
+        {nodePos.x() + chx, nodePos.y() + chy, planeZAt( chx,  chy) + config.maxStepHeight},
+        {nodePos.x() + chx, nodePos.y() - chy, planeZAt( chx, -chy) + config.maxStepHeight},
+        {nodePos.x() - chx, nodePos.y() - chy, planeZAt(-chx, -chy) + config.maxStepHeight},
+        {nodePos.x() - chx, nodePos.y() + chy, planeZAt(-chx,  chy) + config.maxStepHeight},
+    };
+
+    const Eigen::Vector3d heightOffset = planeNormal * config.robotHeight;
+
     // Lower 4 corners + Upper 4 corners (at lower + height offset)
     std::vector<Eigen::Vector3d> robotEdges4Point;
     for(const auto& corner : bottomCorners)
@@ -1005,11 +1009,14 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
     // Build polyhedron from these 8 corners
     Polyhedron_3 robot = generatePolyhedron(robotEdges4Point);
 
-    // Query MLS patches across the entire unrotated robot footprint bounding box
+    // Query MLS patches across the entire unrotated robot footprint bounding box. The z
+    // range is widened by the plane's possible drop/rise across the footprint so patches
+    // under the downhill corners are not missed on slopes.
     const double halfX = config.robotSizeX / 2.0;
     const double halfY = config.robotSizeY / 2.0;
-    Eigen::Vector3d min(-halfX, -halfY, config.maxStepHeight);
-    Eigen::Vector3d max( halfX,  halfY, config.maxStepHeight + config.robotHeight);
+    const double zSlack = std::sqrt(halfX * halfX + halfY * halfY) * std::tan(config.maxSlope);
+    Eigen::Vector3d min(-halfX, -halfY, config.maxStepHeight - zSlack);
+    Eigen::Vector3d max( halfX,  halfY, config.maxStepHeight + config.robotHeight + zSlack);
 
     min += nodePos;
     max += nodePos;
@@ -1038,13 +1045,14 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
     if(area.getNumCells().y() <= 0 || area.getNumCells().x() <= 0)
         return true;
 
-    //intersectCuboid returns an area that is one patch bigger than requested. I.e.
-    //it interpretes both min and max as inclusive. However, we consider max to be exclusive and
-    //thus reduce the cell count by one
-    for(size_t y = 0; y < area.getNumCells().y() - 1; y++, curIndex.y() += 1)
+    //Iterate ALL cells of the view: the old "-1" bounds (justified by intersectCuboid's
+    //inclusive max) silently skipped the last row/column of patches inside the footprint.
+    //For a collision check the conservative direction is inclusion -- an extra boundary
+    //cell only costs one more test.
+    for(size_t y = 0; y < area.getNumCells().y(); y++, curIndex.y() += 1)
     {
         curIndex.x() = minIdx.x();
-        for(size_t x = 0; x < area.getNumCells().x() - 1; x++, curIndex.x() += 1)
+        for(size_t x = 0; x < area.getNumCells().x(); x++, curIndex.x() += 1)
         {
             Eigen::Vector3d pos;
             // Convert grid index directly to world coordinates instead of using view-local coords
@@ -1200,15 +1208,8 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
 
 Polyhedron_3 TraversabilityGenerator3d::createPolyhedronFromSurfacePatch(const SurfacePatch<MLSConfig::SLOPE> *p, const Eigen::Vector3d& position){
 
-    // Extract the normal of the surface patch
-    Eigen::Vector3f normalf = p->getNormal();  // Normal vector of the plane
-    if (normalf.z() < 0)
-        normalf *= -1.0f;
-    Eigen::Vector3d normal{normalf.x(), normalf.y(), normalf.z()};
-    if (normal.norm() > 1e-6)
-        normal.normalize();
-    else
-        normal = Eigen::Vector3d::UnitZ();
+    // The patch normal is only needed to detect degenerate patches below.
+    Eigen::Vector3f normalf = p->getNormal();
 
     std::vector<Eigen::Vector3f> polygonPoints;
     Eigen::Vector2f cellCenter = position.head<2>().cast<float>();
@@ -1235,14 +1236,25 @@ Polyhedron_3 TraversabilityGenerator3d::createPolyhedronFromSurfacePatch(const S
 
     if (polygonPoints.size() >= 3 && polygonFinite)
     {
+        // Cover the patch's REAL vertical extent. A tall obstacle patch (e.g. a fallen
+        // tree) was previously modelled as a 2 cm plate at its fitted plane, so a robot
+        // body polyhedron could pass above it without any intersection being detected.
+        float minZ, maxZ;
+        p->getRange(minZ, maxZ);
+        double zTop = maxZ;
+        double zBot = minZ;
+        if (zTop - zBot < thickness)
+        {
+            const double pad = (thickness - (zTop - zBot)) / 2.0;
+            zTop += pad;
+            zBot -= pad;
+        }
         polyhedronPoints.reserve(polygonPoints.size() * 2);
         for (const auto& pt : polygonPoints)
         {
-            Eigen::Vector3d pt_top = pt.cast<double>();
-            polyhedronPoints.push_back(pt_top);
-
-            Eigen::Vector3d pt_bottom = pt_top - thickness * normal;
-            polyhedronPoints.push_back(pt_bottom);
+            const Eigen::Vector3d ptd = pt.cast<double>();
+            polyhedronPoints.push_back({ptd.x(), ptd.y(), std::max(ptd.z(), zTop)});
+            polyhedronPoints.push_back({ptd.x(), ptd.y(), std::min(ptd.z(), zBot)});
         }
     }
     else
@@ -1285,11 +1297,32 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
     const double hx = config.robotSizeX / 2.0;
     const double hy = config.robotSizeY / 2.0;
 
+    // Reference surface: the node's fitted ground plane. The previous implementation
+    // sampled "terrain" height under each corner, which happily picked obstacle patches
+    // (their normals are often near-vertical) and hoisted/tilted the modelled body onto
+    // the very obstacle it should collide with, reporting the yaw as safe. The fitted
+    // plane comes from the ground fit (walls and thick patches are excluded there), so
+    // obstacles cannot drag the body upwards.
+    Eigen::Vector3d planeNormal = node->getUserData().plane.normal();
+    if (!planeNormal.allFinite() || planeNormal.norm() < 1e-6 || std::abs(planeNormal.z()) < 1e-6)
+        planeNormal = Eigen::Vector3d::UnitZ();
+    else
+    {
+        planeNormal.normalize();
+        if (planeNormal.z() < 0.0)
+            planeNormal = -planeNormal;
+    }
+    //ground plane z at an xy offset from the node centre (the plane passes through nodePos)
+    auto planeZAt = [&](double dx, double dy)
+    {
+        return nodePos.z() - (planeNormal.x() * dx + planeNormal.y() * dy) / planeNormal.z();
+    };
+
     // Build yaw rotation
     Eigen::AngleAxisd yawRotation(yaw, Eigen::Vector3d::UnitZ());
 
-    // Compute 4 lower corners of robot OBB, rotated by yaw
-    std::vector<Eigen::Vector3d> robotCorners;
+    // 4 lower corners of the robot OBB, rotated by yaw, resting on the ground plane with
+    // maxStepHeight clearance
     std::vector<Eigen::Vector3d> localCorners = {
         { hx,  hy, 0.0},
         { hx, -hy, 0.0},
@@ -1297,37 +1330,16 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
         {-hx,  hy, 0.0},
     };
 
+    std::vector<Eigen::Vector3d> bottomCorners;
     for (const auto& lc : localCorners)
     {
-        Eigen::Vector3d rotated = yawRotation * lc;
-        // Sample terrain height at the rotated corner position
-        double terrainH = sampleTerrainHeightAtCorner(nodePos, rotated.x(), rotated.y());
-        // If the corner falls off the patches, ignore this yaw
-        const double robotDiagHalf = std::sqrt(hx * hx + hy * hy);
-        const double vertSearchRange = robotDiagHalf * std::sin(config.maxSlope) + config.maxStepHeight;
-        if (terrainH <= nodePos.z() - vertSearchRange + 1e-4)
-        {
-            return false; // Not on patch, reject this yaw
-        }
-
-        robotCorners.push_back({nodePos.x() + rotated.x(),
-                                nodePos.y() + rotated.y(),
-                                terrainH + config.maxStepHeight});
+        const Eigen::Vector3d rotated = yawRotation * lc;
+        bottomCorners.push_back({nodePos.x() + rotated.x(),
+                                 nodePos.y() + rotated.y(),
+                                 planeZAt(rotated.x(), rotated.y()) + config.maxStepHeight});
     }
 
-    // Compute contact normal from the corners
-    Eigen::Vector3d contactNormal = computeContactPlaneFromCorners(robotCorners);
-    Eigen::Vector3d heightOffset = contactNormal * config.robotHeight;
-
-    std::vector<Eigen::Vector3d> bottomCorners;
-    if (config.articulatedSuspension)
-    {
-        bottomCorners = robotCorners;
-    }
-    else
-    {
-        bottomCorners = computeRigidRobotCorners(robotCorners, contactNormal, yaw, nodePos);
-    }
+    const Eigen::Vector3d heightOffset = planeNormal * config.robotHeight;
 
     // Add upper 4 corners
     std::vector<Eigen::Vector3d> robotEdges8;
@@ -1338,10 +1350,13 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
 
     Polyhedron_3 robot = generatePolyhedron(robotEdges8);
     
-    // Search area: use half-diagonal as search radius (covers all rotations)
+    // Search area: use half-diagonal as search radius (covers all rotations). The z range
+    // is widened by the plane's possible drop/rise across the footprint so patches under
+    // the downhill corners are not missed on slopes.
     const double halfDiag = std::sqrt(hx * hx + hy * hy);
-    Eigen::Vector3d searchMin(-halfDiag, -halfDiag, config.maxStepHeight);
-    Eigen::Vector3d searchMax( halfDiag,  halfDiag, config.maxStepHeight + config.robotHeight);
+    const double zSlack = halfDiag * std::tan(config.maxSlope);
+    Eigen::Vector3d searchMin(-halfDiag, -halfDiag, config.maxStepHeight - zSlack);
+    Eigen::Vector3d searchMax( halfDiag,  halfDiag, config.maxStepHeight + config.robotHeight + zSlack);
 
    searchMin += nodePos;
     searchMax += nodePos;
@@ -1357,10 +1372,13 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
         return true;
 
     Index curIndex = minIdx;
-    for (size_t y = 0; y < area.getNumCells().y() - 1; y++, curIndex.y() += 1)
+    // Iterate ALL cells of the view: the old "-1" bounds silently skipped the last
+    // row/column of patches inside the footprint. For a collision check the conservative
+    // direction is inclusion -- an extra boundary cell only costs one more test.
+    for (size_t y = 0; y < area.getNumCells().y(); y++, curIndex.y() += 1)
     {
         curIndex.x() = minIdx.x();
-        for (size_t x = 0; x < area.getNumCells().x() - 1; x++, curIndex.x() += 1)
+        for (size_t x = 0; x < area.getNumCells().x(); x++, curIndex.x() += 1)
         {
             Eigen::Vector3d pos;
             if (!mlsGrid->fromGrid(curIndex, pos))
