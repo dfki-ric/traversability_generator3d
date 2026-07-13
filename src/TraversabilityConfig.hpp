@@ -44,7 +44,6 @@ public:
         , traverseConcrete(true)
         , articulatedSuspension(true)
         , numYawSamples(12)
-        , useRobustPlaneFit(false)
     {};
 
     /** The maximum step height that the robot can traverse.
@@ -123,11 +122,5 @@ public:
      *  partially traversable cell (mirrored to [180,360)). Higher = finer angular resolution but
      *  slower map generation. Step = 180deg / numYawSamples (e.g. 12 -> 15deg). */
     int numYawSamples;
-
-    /** If true, patch creation uses the deterministic robust plane fit (thickness-based wall
-     *  reject -> height-consensus around the data median -> total-least-squares with fixed
-     *  Tukey/MAD reweighted refits) instead of the RANSAC fit. Same inputs and outputs as
-     *  the RANSAC path, but no randomness: identical maps across runs. */
-    bool useRobustPlaneFit;
 };
 }
