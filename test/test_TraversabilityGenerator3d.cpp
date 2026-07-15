@@ -100,13 +100,15 @@ BOOST_FIXTURE_TEST_CASE(check_travmap, TraversabilityGenerator3dTest){
     maps::grid::Index idxFrontier;
     travGen->getTraversabilityMap().toGrid(positionFrontier, idxFrontier);
     auto frontier = travGen->findMatchingTraversabilityPatchAt(idxFrontier,0);
-    BOOST_CHECK_EQUAL(frontier->getUserData().nodeType, ::traversability_generator3d::NodeType::FRONTIER);
+    // Unmeasured cells are typed OBSTACLE at creation now, so there is no UNKNOWN state
+    // and checkForFrontier never fires: FRONTIER cannot appear in the final map.
+    BOOST_CHECK(frontier->getUserData().nodeType != ::traversability_generator3d::NodeType::FRONTIER);
 
     Eigen::Vector3d positionInflatedFrontier{0.6, 0.0, 0};
     maps::grid::Index idxInflatedFrontier;
     travGen->getTraversabilityMap().toGrid(positionInflatedFrontier, idxInflatedFrontier);
     auto inflatedFrontier = travGen->findMatchingTraversabilityPatchAt(idxInflatedFrontier,0);
-    BOOST_CHECK_EQUAL(inflatedFrontier->getUserData().nodeType, ::traversability_generator3d::NodeType::INFLATED_FRONTIER);
+    BOOST_CHECK(inflatedFrontier->getUserData().nodeType != ::traversability_generator3d::NodeType::INFLATED_FRONTIER);
 
     Eigen::Vector3d positionObs{0.9, 0.9, 0};
     maps::grid::Index idxObstacleNode;
@@ -118,13 +120,27 @@ BOOST_FIXTURE_TEST_CASE(check_travmap, TraversabilityGenerator3dTest){
     maps::grid::Index idxInfObstNode;
     travGen->getTraversabilityMap().toGrid(positionInfObst, idxInfObstNode);
     auto inflatedObstacle = travGen->findMatchingTraversabilityPatchAt(idxInfObstNode,0);
-    BOOST_CHECK_EQUAL(inflatedObstacle->getUserData().nodeType, ::traversability_generator3d::NodeType::INFLATED_OBSTACLE);
+    // A traversable neighbour of an obstacle with no collision-free yaw is now marked a plain
+    // OBSTACLE (previously NodeType::INFLATED_OBSTACLE).
+    BOOST_CHECK_EQUAL(inflatedObstacle->getUserData().nodeType, ::traversability_generator3d::NodeType::OBSTACLE);
 
     Eigen::Vector3d positionTrav{0.3, 0.3, 0};
     maps::grid::Index idxTraversableNode;
     travGen->getTraversabilityMap().toGrid(positionTrav, idxTraversableNode);
     auto traversable = travGen->findMatchingTraversabilityPatchAt(idxTraversableNode,0);
     BOOST_CHECK_EQUAL(traversable->getUserData().nodeType, ::traversability_generator3d::NodeType::TRAVERSABLE);
+
+    // Global invariant since the unmeasured->OBSTACLE change: the final map contains no
+    // UNKNOWN, FRONTIER or INFLATED_FRONTIER node of any kind.
+    for(const maps::grid::LevelList<traversability_generator3d::TravGenNode*>& l : travGen->getTraversabilityMap())
+    {
+        for(traversability_generator3d::TravGenNode* n : l)
+        {
+            BOOST_CHECK(n->getUserData().nodeType != ::traversability_generator3d::NodeType::UNKNOWN);
+            BOOST_CHECK(n->getUserData().nodeType != ::traversability_generator3d::NodeType::FRONTIER);
+            BOOST_CHECK(n->getUserData().nodeType != ::traversability_generator3d::NodeType::INFLATED_FRONTIER);
+        }
+    }
 
     delete travGen;
 }
@@ -314,7 +330,7 @@ BOOST_FIXTURE_TEST_CASE(check_obstacle_inflation_via_expand, TraversabilityGener
     for(auto* n : travGen->getTraversabilityMap().at(idx))
     {
         BOOST_CHECK(n->getType() == TraversabilityNodeBase::OBSTACLE ||
-                    n->getUserData().nodeType == traversability_generator3d::NodeType::INFLATED_OBSTACLE);
+                    n->getUserData().nodeType == traversability_generator3d::NodeType::OBSTACLE);
     }
     delete travGen;
 }

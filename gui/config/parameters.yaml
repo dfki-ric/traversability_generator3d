@@ -3,7 +3,7 @@
 travConfig:
 
   # grid
-  gridResolution: 0.3
+  gridResolution: 0.5
   initialPatchVariance: 0.0001
 
   # robot dimensions

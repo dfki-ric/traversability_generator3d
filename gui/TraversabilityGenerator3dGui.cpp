@@ -412,6 +412,7 @@ void TraversabilityGenerator3dGui::loadTravConfigFromYaml(const std::string& fil
     articulatedSuspensionCheck->blockSignals(true);
     articulatedSuspensionCheck->setChecked(travConfig.articulatedSuspension);
     articulatedSuspensionCheck->blockSignals(false);
+
 }
 
 static traversability_generator3d::SoilType soilTypeFromString(const std::string& s)

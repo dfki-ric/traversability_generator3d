@@ -73,6 +73,11 @@ protected:
     double patchRadius;
 
     std::vector<TravGenNode*> obstacleNodesGrowList;
+
+    /** Nodes typed OBSTACLE because their plane fit failed (unmeasured cells). Tracked
+     *  separately so fillEnclosedUnknownRegions() can tell them apart from real
+     *  obstacles; consumed by each fill pass, cleared in clearTrMap(). */
+    std::vector<TravGenNode*> unmeasuredNodesList;
     
     maps::grid::TraversabilityMap3d<TravGenNode*> trMap;
     maps::grid::TraversabilityMap3d<SoilNode*> soilMap;
@@ -118,6 +123,11 @@ protected:
     void inflateFrontiers();
 
     void inflateObstacles();
+
+    /** Re-expands interior (fully enclosed) unmeasured pockets -- tracked in
+     *  unmeasuredNodesList. Unmeasured cells at the outer map edge (and pockets whose
+     *  interior the fit cannot reach) stay OBSTACLE. */
+    void fillEnclosedUnknownRegions();
     
     TraversabilityConfig config;
     
