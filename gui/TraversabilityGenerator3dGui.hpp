@@ -59,6 +59,10 @@ private:
 
 private:
     QPushButton* resetButton;
+    // Height (Z) filter for imported PLY / point clouds, read at load time in loadMls().
+    QCheckBox* heightFilterCheck = nullptr;
+    QDoubleSpinBox* heightFilterMinSpin = nullptr;
+    QDoubleSpinBox* heightFilterMaxSpin = nullptr;
     vizkit3d::Vizkit3DWidget* widget;
     QDoubleSpinBox* time;
     QWidget window;

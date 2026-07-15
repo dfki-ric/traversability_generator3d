@@ -3,13 +3,13 @@
 travConfig:
 
   # grid
-  gridResolution: 1.0
+  gridResolution: 0.3
   initialPatchVariance: 0.0001
 
   # robot dimensions
-  robotHeight: 3.0
-  robotSizeX: 6.0
-  robotSizeY: 3.0
+  robotHeight: 0.5
+  robotSizeX: 1.0
+  robotSizeY: 1.0
   distToGround: 0.0
   articulatedSuspension: true  # if false, the robot is modeled with a rigid chassis/axles
 
