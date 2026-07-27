@@ -7,30 +7,70 @@
 #include <vizkit3d_debug_drawings/DebugDrawingColors.hpp>
 
 #include <deque>
+#include <cmath>
 using namespace maps::grid;
 
 namespace traversability_generator3d
 {
 
-TraversabilityGenerator3d::TraversabilityGenerator3d(const TraversabilityConfig& config) 
+namespace
+{
+/** Largest distance from the robot ORIGIN to any corner of the (possibly
+ *  offset) footprint box; the radius that covers the body at every yaw. */
+double footprintMaxReach(const TraversabilityConfig& config)
+{
+    const double reachX = config.robotSizeX / 2.0 + std::abs(config.footprintOffsetX);
+    const double halfY = config.robotSizeY / 2.0;
+    return std::sqrt(reachX * reachX + halfY * halfY);
+}
+
+/** Half-side of the largest origin-centered square guaranteed inside the
+ *  (possibly offset) footprint box at every yaw. With an offset the origin
+ *  moves toward one box edge, shrinking the yaw-independent core. */
+double footprintMinHalfExtent(const TraversabilityConfig& config)
+{
+    return std::max(0.0, std::min(config.robotSizeX / 2.0 - std::abs(config.footprintOffsetX),
+                                  config.robotSizeY / 2.0));
+}
+
+/** A robot origin outside the footprint box (|offset| >= sizeX/2) collapses
+ *  the yaw-independent core to zero: the cheap AABB obstacle pre-check then
+ *  passes everything and obstacle detection rests solely on the per-yaw
+ *  checks near inflation seeds. No physical robot is configured like that,
+ *  so treat it as a configuration error. */
+void warnOnDegenerateFootprint(const TraversabilityConfig& config)
+{
+    if (std::abs(config.footprintOffsetX) >= config.robotSizeX / 2.0)
+    {
+        LOG_WARN_S << "TraversabilityGenerator3d: footprintOffsetX ("
+                   << config.footprintOffsetX << ") places the robot origin outside the "
+                   << config.robotSizeX << " m footprint box; yaw-independent obstacle "
+                      "checks degenerate. Check robotSizeX/footprintOffsetX.";
+    }
+}
+}
+
+TraversabilityGenerator3d::TraversabilityGenerator3d(const TraversabilityConfig& config)
     : addInitialPatch(false), config(config), patchHeight(0.02) // Set default patchHeight
 {
+    warnOnDegenerateFootprint(config);
     trMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
     soilMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
 
+    const double offX = config.footprintOffsetX;
     double robotHalfLength = config.robotSizeX / 2.0;
     double robotHalfWidth = config.robotSizeY / 2.0;
     double robotHalfHeight = config.robotHeight / 2.0;
 
     robotEdges = {
-        {robotHalfLength, robotHalfWidth, robotHalfHeight},    // Top-right-front
-        {robotHalfLength, robotHalfWidth, -robotHalfHeight},   // Top-right-back
-        {robotHalfLength, -robotHalfWidth, robotHalfHeight},   // Bottom-right-front
-        {robotHalfLength, -robotHalfWidth, -robotHalfHeight},  // Bottom-right-back
-        {-robotHalfLength, robotHalfWidth, robotHalfHeight},   // Top-left-front
-        {-robotHalfLength, robotHalfWidth, -robotHalfHeight},  // Top-left-back
-        {-robotHalfLength, -robotHalfWidth, robotHalfHeight},  // Bottom-left-front
-        {-robotHalfLength, -robotHalfWidth, -robotHalfHeight}  // Bottom-left-back
+        {offX + robotHalfLength, robotHalfWidth, robotHalfHeight},    // Top-right-front
+        {offX + robotHalfLength, robotHalfWidth, -robotHalfHeight},   // Top-right-back
+        {offX + robotHalfLength, -robotHalfWidth, robotHalfHeight},   // Bottom-right-front
+        {offX + robotHalfLength, -robotHalfWidth, -robotHalfHeight},  // Bottom-right-back
+        {offX - robotHalfLength, robotHalfWidth, robotHalfHeight},    // Top-left-front
+        {offX - robotHalfLength, robotHalfWidth, -robotHalfHeight},   // Top-left-back
+        {offX - robotHalfLength, -robotHalfWidth, robotHalfHeight},   // Bottom-left-front
+        {offX - robotHalfLength, -robotHalfWidth, -robotHalfHeight}   // Bottom-left-back
     };
 
     robotPolyhedron = generatePolyhedron(robotEdges);
@@ -407,8 +447,7 @@ double TraversabilityGenerator3d::sampleTerrainHeightAtCorner(const Eigen::Vecto
     cornerPos.y() += cornerY;
 
     const double searchRadius = config.gridResolution;
-    const double robotDiagHalf = std::sqrt(config.robotSizeX * config.robotSizeX +
-                                           config.robotSizeY * config.robotSizeY) / 2.0;
+    const double robotDiagHalf = footprintMaxReach(config);
     const double vertSearchRange = robotDiagHalf * std::sin(config.maxSlope) + config.maxStepHeight;
     Eigen::Vector3d searchMin = cornerPos - Eigen::Vector3d(searchRadius, searchRadius, vertSearchRange);
     Eigen::Vector3d searchMax = cornerPos + Eigen::Vector3d(searchRadius, searchRadius, vertSearchRange);
@@ -506,13 +545,14 @@ std::vector<Eigen::Vector3d> TraversabilityGenerator3d::compute4PointContactPosi
 {
     // Returns 4 lower OBB corners in perimeter order: +X+Y, +X-Y, -X-Y, -X+Y
     // Each at terrain height + maxStepHeight (bottom of robot body)
+    const double offX = config.footprintOffsetX;
     const double hx = config.robotSizeX / 2.0;
     const double hy = config.robotSizeY / 2.0;
     return {
-        {nodePos.x() + hx, nodePos.y() + hy, sampleTerrainHeightAtCorner(nodePos,  hx,  hy) + config.maxStepHeight},
-        {nodePos.x() + hx, nodePos.y() - hy, sampleTerrainHeightAtCorner(nodePos,  hx, -hy) + config.maxStepHeight},
-        {nodePos.x() - hx, nodePos.y() - hy, sampleTerrainHeightAtCorner(nodePos, -hx, -hy) + config.maxStepHeight},
-        {nodePos.x() - hx, nodePos.y() + hy, sampleTerrainHeightAtCorner(nodePos, -hx,  hy) + config.maxStepHeight},
+        {nodePos.x() + offX + hx, nodePos.y() + hy, sampleTerrainHeightAtCorner(nodePos, offX + hx,  hy) + config.maxStepHeight},
+        {nodePos.x() + offX + hx, nodePos.y() - hy, sampleTerrainHeightAtCorner(nodePos, offX + hx, -hy) + config.maxStepHeight},
+        {nodePos.x() + offX - hx, nodePos.y() - hy, sampleTerrainHeightAtCorner(nodePos, offX - hx, -hy) + config.maxStepHeight},
+        {nodePos.x() + offX - hx, nodePos.y() + hy, sampleTerrainHeightAtCorner(nodePos, offX - hx,  hy) + config.maxStepHeight},
     };
 }
 
@@ -522,6 +562,7 @@ std::vector<Eigen::Vector3d> TraversabilityGenerator3d::computeRigidRobotCorners
     double yaw, 
     const Eigen::Vector3d& nodePos)
 {
+    const double offX = config.footprintOffsetX;
     const double hx = config.robotSizeX / 2.0;
     const double hy = config.robotSizeY / 2.0;
 
@@ -531,10 +572,10 @@ std::vector<Eigen::Vector3d> TraversabilityGenerator3d::computeRigidRobotCorners
     Eigen::Matrix3d R = (slopeRotation * yawRotation).toRotationMatrix();
 
     std::vector<Eigen::Vector3d> localCorners = {
-        { hx,  hy, 0.0},
-        { hx, -hy, 0.0},
-        {-hx, -hy, 0.0},
-        {-hx,  hy, 0.0}
+        {offX + hx,  hy, 0.0},
+        {offX + hx, -hy, 0.0},
+        {offX - hx, -hy, 0.0},
+        {offX - hx,  hy, 0.0}
     };
 
     std::vector<Eigen::Vector3d> rotatedCorners;
@@ -618,12 +659,13 @@ bool TraversabilityGenerator3d::checkStepHeightAABB(TravGenNode *node)
     }
     nodePos.z() += node->getHeight();
 
-    // Use the smaller half-dimension as a uniform search radius on both axes.
+    // Use the yaw-independent footprint core as a uniform search radius on both axes.
     // This keeps the AABB square and avoids a large dead-zone near map boundaries
-    // when robotSizeX >> robotSizeY (or vice-versa).  Cells closer than
-    // min(halfX, halfY) to any obstacle are already obstacle-free by construction;
-    // the remaining gap to the rotation-safe circle is covered by inflateObstacles.
-    const double halfSmall = std::min(config.robotSizeX, config.robotSizeY) / 2.0;
+    // when robotSizeX >> robotSizeY (or vice-versa). With a footprint offset the
+    // origin-centered core shrinks accordingly. Cells closer than this to any
+    // obstacle are already obstacle-free by construction; the remaining gap to the
+    // rotation-safe circle is covered by inflateObstacles.
+    const double halfSmall = footprintMinHalfExtent(config);
     Eigen::Vector3d min(-halfSmall, -halfSmall, config.maxStepHeight);
     Eigen::Vector3d max( halfSmall,  halfSmall, config.maxStepHeight + config.robotHeight);
 
@@ -724,13 +766,14 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
         return nodePos.z() - (planeNormal.x() * dx + planeNormal.y() * dy) / planeNormal.z();
     };
 
+    const double coffX = config.footprintOffsetX;
     const double chx = config.robotSizeX / 2.0;
     const double chy = config.robotSizeY / 2.0;
     std::vector<Eigen::Vector3d> bottomCorners = {
-        {nodePos.x() + chx, nodePos.y() + chy, planeZAt( chx,  chy) + config.maxStepHeight},
-        {nodePos.x() + chx, nodePos.y() - chy, planeZAt( chx, -chy) + config.maxStepHeight},
-        {nodePos.x() - chx, nodePos.y() - chy, planeZAt(-chx, -chy) + config.maxStepHeight},
-        {nodePos.x() - chx, nodePos.y() + chy, planeZAt(-chx,  chy) + config.maxStepHeight},
+        {nodePos.x() + coffX + chx, nodePos.y() + chy, planeZAt(coffX + chx,  chy) + config.maxStepHeight},
+        {nodePos.x() + coffX + chx, nodePos.y() - chy, planeZAt(coffX + chx, -chy) + config.maxStepHeight},
+        {nodePos.x() + coffX - chx, nodePos.y() - chy, planeZAt(coffX - chx, -chy) + config.maxStepHeight},
+        {nodePos.x() + coffX - chx, nodePos.y() + chy, planeZAt(coffX - chx,  chy) + config.maxStepHeight},
     };
 
     const Eigen::Vector3d heightOffset = planeNormal * config.robotHeight;
@@ -754,9 +797,9 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
     // under the downhill corners are not missed on slopes.
     const double halfX = config.robotSizeX / 2.0;
     const double halfY = config.robotSizeY / 2.0;
-    const double zSlack = std::sqrt(halfX * halfX + halfY * halfY) * std::tan(config.maxSlope);
-    Eigen::Vector3d min(-halfX, -halfY, config.maxStepHeight - zSlack);
-    Eigen::Vector3d max( halfX,  halfY, config.maxStepHeight + config.robotHeight + zSlack);
+    const double zSlack = footprintMaxReach(config) * std::tan(config.maxSlope);
+    Eigen::Vector3d min(coffX - halfX, -halfY, config.maxStepHeight - zSlack);
+    Eigen::Vector3d max(coffX + halfX,  halfY, config.maxStepHeight + config.robotHeight + zSlack);
 
     min += nodePos;
     max += nodePos;
@@ -1061,13 +1104,14 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
     // Build yaw rotation
     Eigen::AngleAxisd yawRotation(yaw, Eigen::Vector3d::UnitZ());
 
-    // 4 lower corners of the robot OBB, rotated by yaw, resting on the ground plane with
-    // maxStepHeight clearance
+    // 4 lower corners of the robot OBB (offset along the body x axis), rotated by yaw,
+    // resting on the ground plane with maxStepHeight clearance
+    const double offX = config.footprintOffsetX;
     std::vector<Eigen::Vector3d> localCorners = {
-        { hx,  hy, 0.0},
-        { hx, -hy, 0.0},
-        {-hx, -hy, 0.0},
-        {-hx,  hy, 0.0},
+        {offX + hx,  hy, 0.0},
+        {offX + hx, -hy, 0.0},
+        {offX - hx, -hy, 0.0},
+        {offX - hx,  hy, 0.0},
     };
 
     std::vector<Eigen::Vector3d> bottomCorners;
@@ -1090,10 +1134,10 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
 
     Polyhedron_3 robot = generatePolyhedron(robotEdges8);
     
-    // Search area: use half-diagonal as search radius (covers all rotations). The z range
-    // is widened by the plane's possible drop/rise across the footprint so patches under
-    // the downhill corners are not missed on slopes.
-    const double halfDiag = std::sqrt(hx * hx + hy * hy);
+    // Search area: use the offset-aware max reach as search radius (covers all rotations).
+    // The z range is widened by the plane's possible drop/rise across the footprint so
+    // patches under the downhill corners are not missed on slopes.
+    const double halfDiag = footprintMaxReach(config);
     const double zSlack = halfDiag * std::tan(config.maxSlope);
     Eigen::Vector3d searchMin(-halfDiag, -halfDiag, config.maxStepHeight - zSlack);
     Eigen::Vector3d searchMax( halfDiag,  halfDiag, config.maxStepHeight + config.robotHeight + zSlack);
@@ -1238,19 +1282,24 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
 
 bool TraversabilityGenerator3d::computeSafeOrientations(TravGenNode* node)
 {
-    // Sample yaws over [0,180deg); the rectangular footprint is 180deg-symmetric, so each safe
-    // sample is mirrored by +180deg. Higher numYawSamples => finer resolution, slower map gen.
+    // Sample yaws over [0,180deg); a CENTERED rectangular footprint is 180deg-symmetric, so
+    // each safe sample can be mirrored by +180deg. With a footprint offset that symmetry is
+    // broken (the long side points somewhere), so the full circle must be sampled at the
+    // same angular resolution. Higher numYawSamples => finer resolution, slower map gen.
     const int numSamples = std::max(1, config.numYawSamples);
     const double step = M_PI / numSamples;
+    const bool symmetric = std::abs(config.footprintOffsetX) < 1e-6;
+    const int totalSamples = symmetric ? numSamples : 2 * numSamples;
 
     std::vector<double> safeYaws;
-    for (int i = 0; i < numSamples; ++i)
+    for (int i = 0; i < totalSamples; ++i)
     {
         const double yaw = i * step;
         if (checkCollisionForYaw(node, yaw))
         {
             safeYaws.push_back(yaw);
-            safeYaws.push_back(yaw + M_PI);
+            if (symmetric)
+                safeYaws.push_back(yaw + M_PI);
         }
     }
 
@@ -1270,7 +1319,7 @@ bool TraversabilityGenerator3d::computeSafeOrientations(TravGenNode* node)
 
 void TraversabilityGenerator3d::inflateFrontiers()
 {
-    const double growRadiusSquared = std::pow(std::sqrt(config.robotSizeX * config.robotSizeX + config.robotSizeY * config.robotSizeY) / 2.0, 2);
+    const double growRadiusSquared = std::pow(footprintMaxReach(config), 2);
 
     for(TravGenNode *n : frontierNodesGrowList)
     {
@@ -1428,6 +1477,7 @@ void TraversabilityGenerator3d::fillEnclosedUnknownRegions()
 
 void TraversabilityGenerator3d::setConfig(const TraversabilityConfig &config)
 {
+    warnOnDegenerateFootprint(config);
     this->config = config;
     trMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
     soilMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
@@ -1442,19 +1492,20 @@ void TraversabilityGenerator3d::setConfig(const TraversabilityConfig &config)
         soilMap.getLocalFrame() = mlsGrid->getLocalFrame();
     }
 
+    const double offX = config.footprintOffsetX;
     double robotHalfLength = config.robotSizeX / 2.0;
     double robotHalfWidth = config.robotSizeY / 2.0;
     double robotHalfHeight = config.robotHeight / 2.0;
 
     robotEdges = {
-        {robotHalfLength, robotHalfWidth, robotHalfHeight},    // Top-right-front
-        {robotHalfLength, robotHalfWidth, -robotHalfHeight},   // Top-right-back
-        {robotHalfLength, -robotHalfWidth, robotHalfHeight},   // Bottom-right-front
-        {robotHalfLength, -robotHalfWidth, -robotHalfHeight},  // Bottom-right-back
-        {-robotHalfLength, robotHalfWidth, robotHalfHeight},   // Top-left-front
-        {-robotHalfLength, robotHalfWidth, -robotHalfHeight},  // Top-left-back
-        {-robotHalfLength, -robotHalfWidth, robotHalfHeight},  // Bottom-left-front
-        {-robotHalfLength, -robotHalfWidth, -robotHalfHeight}  // Bottom-left-back
+        {offX + robotHalfLength, robotHalfWidth, robotHalfHeight},    // Top-right-front
+        {offX + robotHalfLength, robotHalfWidth, -robotHalfHeight},   // Top-right-back
+        {offX + robotHalfLength, -robotHalfWidth, robotHalfHeight},   // Bottom-right-front
+        {offX + robotHalfLength, -robotHalfWidth, -robotHalfHeight},  // Bottom-right-back
+        {offX - robotHalfLength, robotHalfWidth, robotHalfHeight},    // Top-left-front
+        {offX - robotHalfLength, robotHalfWidth, -robotHalfHeight},   // Top-left-back
+        {offX - robotHalfLength, -robotHalfWidth, robotHalfHeight},   // Bottom-left-front
+        {offX - robotHalfLength, -robotHalfWidth, -robotHalfHeight}   // Bottom-left-back
     };
 
     robotPolyhedron = generatePolyhedron(robotEdges);
@@ -1599,19 +1650,18 @@ void TraversabilityGenerator3d::expandAll(TravGenNode* startNode, const double e
 
 void TraversabilityGenerator3d::inflateObstacles()
 {
-    const double halfRobotSizeX = config.robotSizeX / 2.0;
-    const double halfRobotSizeY = config.robotSizeY / 2.0;
-
-    // The AABB check already keeps the robot centre at least min(halfX, halfY) away
-    // from any obstacle (the tight-axis footprint boundary).  We only need to inflate
-    // by the remaining gap to half_diagonal so that the robot can still rotate freely
-    // at the edge of the traversable zone without its corners hitting the obstacle.
-    // Using the full half_diagonal here double-counts the footprint clearance and
-    // closes far too much traversable space, especially in narrow corridors.
-    const double halfDiagonal = std::sqrt(halfRobotSizeX * halfRobotSizeX + halfRobotSizeY * halfRobotSizeY);
+    // The AABB check already keeps the robot centre at least footprintMinHalfExtent()
+    // away from any obstacle (the tight-axis footprint boundary).  We only need to
+    // inflate by the remaining gap to the rotation-safe reach so that the robot can
+    // still rotate freely at the edge of the traversable zone without its corners
+    // hitting the obstacle. Using the full reach here would double-count the footprint
+    // clearance and close far too much traversable space in narrow corridors. Both
+    // radii are offset-aware: an off-center footprint shrinks the guaranteed core and
+    // extends the swept circle.
+    const double halfDiagonal = footprintMaxReach(config);
 
     // Geometric gap between the AABB boundary and the rotation-safe circle.
-    const double inflGap = halfDiagonal - std::min(halfRobotSizeX, halfRobotSizeY)/2;
+    const double inflGap = halfDiagonal - footprintMinHalfExtent(config)/2;
 
     // obstacleInflationMultiplier must be at least 1.0: the AABB/OBB collision check
     // now uses only min(sizeX, sizeY)/2 as its search radius, so inflateObstacles

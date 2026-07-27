@@ -27,6 +27,7 @@ public:
         , robotHeight(0.5)
         , robotSizeX(0.5)
         , robotSizeY(0.5)
+        , footprintOffsetX(0.0)
         , distToGround(0)
         , slopeMetricScale(1.0)
         , slopeMetric(NONE)
@@ -77,6 +78,13 @@ public:
     double robotHeight;
     double robotSizeX;
     double robotSizeY;
+
+    /** Forward (x) offset of the footprint-box CENTER from the robot origin,
+     *  in the robot frame. 0 keeps the historic behavior (box centered on the
+     *  origin). A robot whose origin is not at its geometric center (e.g. a
+     *  front tool) sets this so the box [offset - sizeX/2, offset + sizeX/2]
+     *  matches the real machine instead of mirroring the larger side. */
+    double footprintOffsetX;
 
     /* Distance from body frame to ground
      * start and goal position are expected in body frame
