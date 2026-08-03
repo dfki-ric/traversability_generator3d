@@ -1,4 +1,7 @@
 #include "TraversabilityGenerator3dGui.hpp"
+#include <chrono>
+#include <sched.h>
+#include <unistd.h>
 #include <QFileDialog>
 #include <QPushButton>
 #include <QLabel>
@@ -318,6 +321,10 @@ void TraversabilityGenerator3dGui::loadTravConfigFromYaml(const std::string& fil
     
     travConfig.obstacleInflationMultiplier = cfg["obstacleInflationMultiplier"] ? cfg["obstacleInflationMultiplier"].as<double>() : travConfig.obstacleInflationMultiplier;
 
+    // ints (fall back to the TraversabilityConfig defaults when absent)
+    travConfig.numYawSamples = cfg["numYawSamples"] ? cfg["numYawSamples"].as<int>() : travConfig.numYawSamples;
+    travConfig.numThreads    = cfg["numThreads"] ? cfg["numThreads"].as<int>() : travConfig.numThreads;
+
     // enum
     std::string s = cfg["slopeMetric"].as<std::string>();
     if     (s == "AVG_SLOPE")      travConfig.slopeMetric = traversability_generator3d::AVG_SLOPE;
@@ -607,8 +614,33 @@ void TraversabilityGenerator3dGui::expandAll()
         LOG_WARN_S << "Start pose not picked yet!";
         return;
     }
+    // OSG pins the viewer (= Qt main) thread to CPU 0 at realize(), and the
+    // OpenMP workers spawned from this thread INHERIT that single-core mask —
+    // the whole expansion team then time-slices one core (measured: 17 s
+    // instead of ~2 s). Widen this thread's affinity to all CPUs before the
+    // first parallel region runs.
+    cpu_set_t allCpus;
+    CPU_ZERO(&allCpus);
+    for (long cpu = 0; cpu < sysconf(_SC_NPROCESSORS_ONLN); ++cpu)
+        CPU_SET(cpu, &allCpus);
+    sched_setaffinity(0, sizeof(allCpus), &allCpus);
+
+    const auto tExpand = std::chrono::steady_clock::now();
     travGen->expandAll(Eigen::Vector3d(start.position.x(), start.position.y(), start.position.z()));
-    
+    LOG_INFO_S << "expandAll took "
+               << std::chrono::duration<double>(std::chrono::steady_clock::now() - tExpand).count()
+               << " s for " << travGen->getNumNodes() << " nodes (the map render that "
+               << "follows runs in the viz, not in traversability_generator3d).";
+
+    if (travGen->getNumNodes() <= 1)
+    {
+        LOG_WARN_S << "Expansion stopped at the start cell: the ground plane fit failed there "
+                   << "(needs >= " << 100.0 * travConfig.minTraversablePercentage
+                   << "% of the surrounding " << std::min(travConfig.robotSizeX, travConfig.robotSizeY)
+                   << " m box covered by patches). Pick a start on denser data or lower "
+                   << "minTraversablePercentage.";
+    }
+
     applySoilInformationToGenerator();
     
     trav3dViz.updateData(travGen->getTraversabilityMap());

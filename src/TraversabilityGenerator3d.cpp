@@ -6,8 +6,19 @@
 #include <vizkit3d_debug_drawings/DebugDrawing.hpp>
 #include <vizkit3d_debug_drawings/DebugDrawingColors.hpp>
 
+#include <chrono>
 #include <deque>
 #include <cmath>
+#include <cstdint>
+#include <algorithm>
+#include <limits>
+#include <unordered_set>
+
+#ifdef _OPENMP
+#include <omp.h>
+#include <sched.h>
+#endif
+
 using namespace maps::grid;
 
 namespace traversability_generator3d
@@ -48,6 +59,31 @@ void warnOnDegenerateFootprint(const TraversabilityConfig& config)
                       "checks degenerate. Check robotSizeX/footprintOffsetX.";
     }
 }
+
+/** 8-neighborhood expansion offsets, shared by addConnectedPatches() and the
+ *  wave-parallel expandAll(). */
+const std::vector<Index> kNeighborOffsets = {
+    Index(1, 1),
+    Index(1, 0),
+    Index(1, -1),
+    Index(0, 1),
+    Index(0, -1),
+    Index(-1, 1),
+    Index(-1, 0),
+    Index(-1, -1)};
+
+/** Key for per-cell maps during one expansion wave. */
+uint64_t cellKey(const Index& idx)
+{
+    return (static_cast<uint64_t>(static_cast<uint32_t>(idx.y())) << 32) |
+            static_cast<uint32_t>(idx.x());
+}
+
+/** Below this many items a parallel region is not launched (OpenMP if-clause):
+ *  the team launch costs more than the work, and in desktop/GUI processes
+ *  (llvmpipe render threads competing for cores) each launch can cost
+ *  milliseconds — hundreds of tiny BFS waves then dominate the runtime. */
+constexpr std::int64_t kMinParallelItems = 32;
 }
 
 TraversabilityGenerator3d::TraversabilityGenerator3d(const TraversabilityConfig& config)
@@ -853,6 +889,14 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
                 if(CGAL::Polygon_mesh_processing::do_intersect(patch,robot))
                 {
 #ifdef ENABLE_DEBUG_DRAWINGS
+                    // V3DD must NOT run from OpenMP workers: DRAW_* marshals to the
+                    // Qt GUI thread with a BLOCKING invoke, and during expansion the
+                    // GUI thread is parked on this parallel region's barrier — a
+                    // guaranteed deadlock (observed live in the travgen GUI). Draw
+                    // only when the check runs on a serial path.
+#ifdef _OPENMP
+                    if (!omp_in_parallel())
+#endif
                     {
                         static int collisionCounter = 0;
                         collisionCounter++;
@@ -1064,7 +1108,67 @@ Polyhedron_3 TraversabilityGenerator3d::createPolyhedronFromSurfacePatch(const S
     return generatePolyhedron(polyhedronPoints);
 }
 
-bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double yaw)
+std::vector<TraversabilityGenerator3d::YawCheckPatch> TraversabilityGenerator3d::collectYawCheckPatches(TravGenNode* node)
+{
+    std::vector<YawCheckPatch> out;
+
+    Eigen::Vector3d nodePos;
+    if (!trMap.fromGrid(node->getIndex(), nodePos))
+        return out;
+    nodePos.z() += node->getHeight();
+
+    // Same rotation-safe search window as the per-yaw checks (covers all yaws).
+    const double halfDiag = footprintMaxReach(config);
+    const double zSlack = halfDiag * std::tan(config.maxSlope);
+    Eigen::Vector3d searchMin(-halfDiag, -halfDiag, config.maxStepHeight - zSlack);
+    Eigen::Vector3d searchMax( halfDiag,  halfDiag, config.maxStepHeight + config.robotHeight + zSlack);
+    searchMin += nodePos;
+    searchMax += nodePos;
+    const Eigen::AlignedBox3d limitBox(searchMin, searchMax);
+    View area = mlsGrid->intersectCuboid(limitBox);
+
+    Index minIdx, maxIdx;
+    if (!mlsGrid->toGrid(limitBox.min(), minIdx) || !mlsGrid->toGrid(limitBox.max(), maxIdx))
+        return out;  // boundary case: checkCollisionForYaw() re-checks and returns unsafe
+
+    if (area.getNumCells().y() <= 0 || area.getNumCells().x() <= 0)
+        return out;
+
+    Index curIndex = minIdx;
+    for (size_t y = 0; y < area.getNumCells().y(); y++, curIndex.y() += 1)
+    {
+        curIndex.x() = minIdx.x();
+        for (size_t x = 0; x < area.getNumCells().x(); x++, curIndex.x() += 1)
+        {
+            Eigen::Vector3d pos;
+            if (!mlsGrid->fromGrid(curIndex, pos))
+                continue;
+
+            for (const SurfacePatch<MLSConfig::SLOPE>* p : area.at(x, y))
+            {
+                pos.z() = (p->getTop() + p->getBottom()) / 2.0;
+
+                YawCheckPatch cp;
+                cp.poly = createPolyhedronFromSurfacePatch(p, pos);
+                cp.cellXY = pos.head<2>();
+                cp.patch = p;
+                cp.pos = pos;
+                // Top of the ACTUAL polyhedron (its z can exceed the raw patch
+                // range through the padded plane reconstruction). An empty
+                // polyhedron cannot collide; -inf makes the z prefilter drop it.
+                double zMax = -std::numeric_limits<double>::infinity();
+                for (auto it = cp.poly.points_begin(); it != cp.poly.points_end(); ++it)
+                    zMax = std::max(zMax, CGAL::to_double(it->z()));
+                cp.zMax = zMax;
+                out.push_back(std::move(cp));
+            }
+        }
+    }
+    return out;
+}
+
+bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double yaw,
+                                                     const std::vector<YawCheckPatch>& patches)
 {
     /** Check if the robot, rotated to a specific yaw angle, would collide
      *  with MLS patches at the given node position.
@@ -1133,49 +1237,65 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
         robotEdges8.push_back(c + heightOffset);
 
     Polyhedron_3 robot = generatePolyhedron(robotEdges8);
-    
-    // Search area: use the offset-aware max reach as search radius (covers all rotations).
-    // The z range is widened by the plane's possible drop/rise across the footprint so
-    // patches under the downhill corners are not missed on slopes.
+
+    // Same boundary semantics as before the patch cache: a rotation-safe window
+    // that leaves the map means the cell cannot be traversable at any yaw.
     const double halfDiag = footprintMaxReach(config);
     const double zSlack = halfDiag * std::tan(config.maxSlope);
     Eigen::Vector3d searchMin(-halfDiag, -halfDiag, config.maxStepHeight - zSlack);
     Eigen::Vector3d searchMax( halfDiag,  halfDiag, config.maxStepHeight + config.robotHeight + zSlack);
-
-   searchMin += nodePos;
+    searchMin += nodePos;
     searchMax += nodePos;
-
     const Eigen::AlignedBox3d limitBox(searchMin, searchMax);
-    View area = mlsGrid->intersectCuboid(limitBox);
-
     Index minIdx, maxIdx;
     if (!mlsGrid->toGrid(limitBox.min(), minIdx) || !mlsGrid->toGrid(limitBox.max(), maxIdx))
         return false;
 
-    if (area.getNumCells().y() <= 0 || area.getNumCells().x() <= 0)
-        return true;
+    // Conservative prefilters applied per cached patch BEFORE any exact CGAL
+    // test. XY: the patch cell (padded by its half-diagonal plus the tilt-induced
+    // XY reach of the body top) must overlap the yaw-rotated footprint box.
+    // Z: a patch entirely below the tilted body-bottom plane (ground under the
+    // belly -- the vast majority of the window) cannot collide.
+    const double cellHalfDiag = mlsGrid->getResolution().x() * M_SQRT1_2;
+    const double tiltReach = config.robotHeight * planeNormal.head<2>().norm();
+    const double xyMargin = cellHalfDiag + tiltReach + 1e-6;
+    const double gradSlack = cellHalfDiag *
+        planeNormal.head<2>().norm() / std::max(1e-6, planeNormal.z());
+    const double cosYaw = std::cos(yaw);
+    const double sinYaw = std::sin(yaw);
 
-    Index curIndex = minIdx;
-    // Iterate ALL cells of the view: the old "-1" bounds silently skipped the last
-    // row/column of patches inside the footprint. For a collision check the conservative
-    // direction is inclusion -- an extra boundary cell only costs one more test.
-    for (size_t y = 0; y < area.getNumCells().y(); y++, curIndex.y() += 1)
+    for (const YawCheckPatch& cp : patches)
     {
-        curIndex.x() = minIdx.x();
-        for (size_t x = 0; x < area.getNumCells().x(); x++, curIndex.x() += 1)
+        const double dx = cp.cellXY.x() - nodePos.x();
+        const double dy = cp.cellXY.y() - nodePos.y();
+        const double localX =  cosYaw * dx + sinYaw * dy;
+        const double localY = -sinYaw * dx + cosYaw * dy;
+        if (localX < offX - hx - xyMargin || localX > offX + hx + xyMargin ||
+            std::abs(localY) > hy + xyMargin)
+            continue;
+
+        const double bodyBottomZ = planeZAt(dx, dy) + config.maxStepHeight;
+        if (cp.zMax < bodyBottomZ - gradSlack - 1e-6)
+            continue;
+
+        if (CGAL::Polygon_mesh_processing::do_intersect(cp.poly, robot))
         {
-            Eigen::Vector3d pos;
-            if (!mlsGrid->fromGrid(curIndex, pos))
-                continue;
-
-            for (const SurfacePatch<MLSConfig::SLOPE>* p : area.at(x, y))
-            {
-                pos.z() = (p->getTop() + p->getBottom()) / 2.0;
-
-                Polyhedron_3 patch = createPolyhedronFromSurfacePatch(p, pos);
-                if (CGAL::Polygon_mesh_processing::do_intersect(patch, robot))
+                // Aliases keep the debug-drawing block below identical to the
+                // pre-cache implementation.
+                const SurfacePatch<MLSConfig::SLOPE>* p = cp.patch;
+                Eigen::Vector3d pos = cp.pos;
+                (void)p;
+                (void)pos;
                 {
 #ifdef ENABLE_DEBUG_DRAWINGS
+                    // V3DD must NOT run from OpenMP workers: DRAW_* marshals to the
+                    // Qt GUI thread with a BLOCKING invoke, and during expansion the
+                    // GUI thread is parked on this parallel region's barrier — a
+                    // guaranteed deadlock (observed live in the travgen GUI). Draw
+                    // only when the check runs on a serial path.
+#ifdef _OPENMP
+                    if (!omp_in_parallel())
+#endif
                     {
                         static int yawCollisionCounter = 0;
                         yawCollisionCounter++;
@@ -1273,7 +1393,6 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
 #endif
                     return false; // collision found — this yaw is not safe
                 }
-            }
         }
     }
 
@@ -1282,24 +1401,27 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
 
 bool TraversabilityGenerator3d::computeSafeOrientations(TravGenNode* node)
 {
-    // Sample yaws over [0,180deg); a CENTERED rectangular footprint is 180deg-symmetric, so
-    // each safe sample can be mirrored by +180deg. With a footprint offset that symmetry is
-    // broken (the long side points somewhere), so the full circle must be sampled at the
-    // same angular resolution. Higher numYawSamples => finer resolution, slower map gen.
+    // Exactly numYawSamples collision checks over the FULL circle [0,360deg),
+    // independent of the footprint offset -- no 180deg mirroring shortcut. The
+    // offset is applied to the robot geometry of EVERY check (hull corners and
+    // XY prefilter in checkCollisionForYaw, offset-aware search window in
+    // collectYawCheckPatches), so each yaw intersects the correctly shifted
+    // set of MLS patches. numYawSamples is both the check count and the
+    // angular resolution (step = 360deg / numYawSamples; 12 -> 30deg).
     const int numSamples = std::max(1, config.numYawSamples);
-    const double step = M_PI / numSamples;
-    const bool symmetric = std::abs(config.footprintOffsetX) < 1e-6;
-    const int totalSamples = symmetric ? numSamples : 2 * numSamples;
+    const double step = 2.0 * M_PI / numSamples;
+
+    // The patch polyhedra are yaw-independent: build them once for this node
+    // and reuse them for every sampled yaw.
+    const std::vector<YawCheckPatch> yawPatches = collectYawCheckPatches(node);
 
     std::vector<double> safeYaws;
-    for (int i = 0; i < totalSamples; ++i)
+    for (int i = 0; i < numSamples; ++i)
     {
         const double yaw = i * step;
-        if (checkCollisionForYaw(node, yaw))
+        if (checkCollisionForYaw(node, yaw, yawPatches))
         {
             safeYaws.push_back(yaw);
-            if (symmetric)
-                safeYaws.push_back(yaw + M_PI);
         }
     }
 
@@ -1440,8 +1562,15 @@ void TraversabilityGenerator3d::fillEnclosedUnknownRegions()
     // loop so the flood fills the pocket interior. The re-expansion cannot escape the
     // pocket: every node surrounding it is already expanded.
     std::deque<TravGenNode*> candidates;
-    for(TravGenNode* node : pocketNodes)
+    // Refit the pocket rim in parallel: computePlaneRansac only reads the MLS and
+    // writes the node's own data. Queue bookkeeping stays serial below.
+    const std::vector<TravGenNode*> pocketVec(pocketNodes.begin(), pocketNodes.end());
+    std::vector<uint8_t> fitOkVec(pocketVec.size(), 0);
+    const std::int64_t numPocket = static_cast<std::int64_t>(pocketVec.size());
+    #pragma omp parallel for schedule(dynamic) if(numPocket >= kMinParallelItems)
+    for(std::int64_t i = 0; i < numPocket; i++)
     {
+        TravGenNode* node = pocketVec[i];
         const float oldHeight = node->getHeight();
         node->setType(TraversabilityNodeBase::UNSET);
         node->getUserData().nodeType = NodeType::UNSET;
@@ -1449,7 +1578,12 @@ void TraversabilityGenerator3d::fillEnclosedUnknownRegions()
         // Keep the creation-time (interpolated) height: the node already sits in its
         // height-ordered level list, so it must not move vertically after insertion.
         node->setHeight(oldHeight);
-        if(!fitOk)
+        fitOkVec[i] = fitOk ? 1 : 0;
+    }
+    for(std::int64_t i = 0; i < numPocket; i++)
+    {
+        TravGenNode* node = pocketVec[i];
+        if(!fitOkVec[i])
         {
             node->setType(TraversabilityNodeBase::OBSTACLE);
             node->getUserData().nodeType = NodeType::OBSTACLE;
@@ -1560,54 +1694,228 @@ void TraversabilityGenerator3d::expandAll(TravGenNode* startNode, const double e
     if(!startNode)
         return;
 
-    std::deque<TravGenNode *> candidates;
-    candidates.push_back(startNode);
-
-    int cnd = 0;
-
-    while(!candidates.empty())
+    // Wave-synchronous parallel BFS. Per wave, the expensive read-only geometry
+    // (step-height AABB/OBB checks and the RANSAC plane fits of newly discovered
+    // cells) runs multi-threaded; every mutation of the shared graph (node
+    // insertion, ids, connections, type changes, grow lists) then runs on this
+    // thread in wave order, reproducing the serial BFS. The only deviation from
+    // strict FIFO order is which same-wave parent seeds a new cell's fit height;
+    // competing request heights lie within maxStepHeight of each other, so only
+    // borderline cells can differ.
+#ifdef _OPENMP
+    // config.numThreads semantics: 0 = do not parallelize (single-threaded on
+    // the calling thread, no OpenMP worker team); N > 0 = use exactly N threads.
+    omp_set_num_threads(std::max(1, config.numThreads));
+    LOG_INFO_S << "TraversabilityGenerator3d: expanding with up to "
+               << omp_get_max_threads() << " threads.";
+    // OpenMP workers inherit the calling thread's CPU affinity. Some libraries
+    // (notably OSG at realize()) pin their thread to a single core, which
+    // silently collapses the whole team onto that core (seen live: 17 s
+    // instead of 2 s in the travgen GUI). Warn instead of failing silently.
     {
-        TravGenNode *node = candidates.front();
-        candidates.pop_front();
-
-        //check if the node was evaluated before somehow
-        if(node->isExpanded())
-            continue;
-
-        cnd++;
-
-        if((cnd % 1000) == 0)
+        cpu_set_t affinityMask;
+        if (sched_getaffinity(0, sizeof(affinityMask), &affinityMask) == 0)
         {
-            LOG_DEBUG_S << "TraversabilityGenerator3d: Expanded " << cnd << " traversability nodes.";
-        }
-
-        if(!expandNode(node))
-        {
-
-            continue;
-        }
-
-        for(auto *n : node->getConnections())
-        {
-            if(!n->isExpanded())
+            const int allowedCpus = CPU_COUNT(&affinityMask);
+            if (allowedCpus < omp_get_max_threads())
             {
-                if(expandDist > 0)
-                {
-                    const double dist = (startNode->getPosition(trMap) - n->getPosition(trMap)).norm();
-                    if(dist <= expandDist)
-                        candidates.push_back(static_cast<TravGenNode *>(n));
-                }
-                else
-                {
-                    candidates.push_back(static_cast<TravGenNode *>(n));
-                }
+                LOG_WARN_S << "TraversabilityGenerator3d: the calling thread is "
+                           << "restricted to " << allowedCpus << " CPU(s) but "
+                           << omp_get_max_threads() << " threads were requested -- "
+                           << "the OpenMP team inherits this mask and will share "
+                           << "those CPU(s). Widen the thread's affinity (e.g. "
+                           << "sched_setaffinity) before calling expandAll().";
             }
         }
     }
+#endif
+    const auto expandStart = std::chrono::steady_clock::now();
 
+    std::vector<TravGenNode*> wave;
+    wave.push_back(startNode);
+
+    int cnd = 0;
+    // Accumulated BFS sub-phase timings, reported once per expansion; used to
+    // pinpoint whether slowdowns sit in the parallel or the serial phases.
+    double tClassify = 0.0, tCollect = 0.0, tPrefit = 0.0, tFinalize = 0.0;
+    int numWaves = 0;
+    typedef std::chrono::steady_clock Clock;
+
+    while(!wave.empty())
+    {
+        // A node can be enqueued by several parents (also across waves): keep the
+        // first occurrence of each not-yet-expanded node, mirroring the serial
+        // isExpanded() check on dequeue.
+        {
+            std::unordered_set<TravGenNode*> seen;
+            std::vector<TravGenNode*> filtered;
+            filtered.reserve(wave.size());
+            for(TravGenNode* n : wave)
+            {
+                if(!n->isExpanded() && seen.insert(n).second)
+                    filtered.push_back(n);
+            }
+            wave.swap(filtered);
+        }
+        if(wave.empty())
+            break;
+
+        const std::int64_t waveSize = static_cast<std::int64_t>(wave.size());
+        numWaves++;
+        auto tPhase = Clock::now();
+
+        // Phase 1 (parallel): classification checks, read-only on the shared maps.
+        std::vector<uint8_t> outcome(waveSize, 0);
+        #pragma omp parallel for schedule(dynamic) if(waveSize >= kMinParallelItems)
+        for(std::int64_t i = 0; i < waveSize; i++)
+        {
+            outcome[i] = static_cast<uint8_t>(classifyNode(wave[i]));
+        }
+
+        tClassify += std::chrono::duration<double>(Clock::now() - tPhase).count();
+        tPhase = Clock::now();
+
+        // Phase 2a (serial, cheap plane math): collect the cells this wave will
+        // create. emplace() keeps the FIRST request per cell = wave order, which
+        // matches the serial creation order.
+        PrefitCache prefits;
+        for(std::int64_t i = 0; i < waveSize; i++)
+        {
+            if(static_cast<NodeClassification>(outcome[i]) != NodeClassification::Traversable)
+                continue;
+            for(const Index& idxS : kNeighborOffsets)
+            {
+                Index idx;
+                double localHeight = 0.0;
+                const NeighborRequest req = computeNeighborRequest(wave[i], idxS, idx, localHeight);
+                if(req == NeighborRequest::Abort)
+                    break;
+                if(req == NeighborRequest::Skip)
+                    continue;
+                if(findMatchingTraversabilityPatchAt(idx, localHeight))
+                    continue;
+                prefits.emplace(cellKey(idx), PrefitEntry{idx, localHeight, PrefitPatch{}});
+            }
+        }
+
+        tCollect += std::chrono::duration<double>(Clock::now() - tPhase).count();
+        tPhase = Clock::now();
+
+        // Phase 2b (parallel): RANSAC-fit the new cells.
+        std::vector<PrefitEntry*> fitJobs;
+        fitJobs.reserve(prefits.size());
+        for(auto& kv : prefits)
+            fitJobs.push_back(&kv.second);
+        const std::int64_t numJobs = static_cast<std::int64_t>(fitJobs.size());
+        #pragma omp parallel for schedule(dynamic) if(numJobs >= kMinParallelItems)
+        for(std::int64_t i = 0; i < numJobs; i++)
+        {
+            fitJobs[i]->patch = buildPatchNodeAt(fitJobs[i]->idx, fitJobs[i]->requestHeight);
+        }
+
+        tPrefit += std::chrono::duration<double>(Clock::now() - tPhase).count();
+        tPhase = Clock::now();
+
+        // Phase 2c (serial): the original expansion semantics, in wave order.
+        std::vector<TravGenNode*> nextWave;
+        for(std::int64_t i = 0; i < waveSize; i++)
+        {
+            TravGenNode* node = wave[i];
+
+            if(config.useSoilInformation)
+            {
+                const Eigen::Vector3d nodePos = node->getPosition(trMap);
+                generateStartSoilNode(nodePos);
+            }
+
+            node->setExpanded();
+
+            cnd++;
+            if((cnd % 1000) == 0)
+            {
+                LOG_DEBUG_S << "TraversabilityGenerator3d: Expanded " << cnd << " traversability nodes.";
+            }
+
+            switch(static_cast<NodeClassification>(outcome[i]))
+            {
+                case NodeClassification::Unknown:
+                    continue;
+                case NodeClassification::PreexistingObstacle:
+                    obstacleNodesGrowList.push_back(node);
+                    continue;
+                case NodeClassification::Obstacle:
+                    node->setType(TraversabilityNodeBase::OBSTACLE);
+                    node->getUserData().nodeType = NodeType::OBSTACLE;
+                    obstacleNodesGrowList.push_back(node);
+                    continue;
+                case NodeClassification::Traversable:
+                    break;
+            }
+
+            addConnectedPatches(node, &prefits);
+
+            if(checkForFrontier(node))
+            {
+                node->setType(TraversabilityNodeBase::FRONTIER);
+                node->getUserData().nodeType = NodeType::FRONTIER;
+                frontierNodesGrowList.push_back(node);
+                continue;
+            }
+
+            node->setType(TraversabilityNodeBase::TRAVERSABLE);
+            node->getUserData().nodeType = NodeType::TRAVERSABLE;
+
+            for(auto* n : node->getConnections())
+            {
+                if(n->isExpanded())
+                    continue;
+                if(expandDist > 0)
+                {
+                    const double dist = (startNode->getPosition(trMap) - n->getPosition(trMap)).norm();
+                    if(dist > expandDist)
+                        continue;
+                }
+                nextWave.push_back(static_cast<TravGenNode*>(n));
+            }
+        }
+
+        // Pre-fitted nodes nobody consumed (their request was satisfied by a
+        // wave-mate's insertion instead) were never part of the map: free them.
+        for(auto& kv : prefits)
+        {
+            if(kv.second.patch.node)
+            {
+                delete kv.second.patch.node;
+                kv.second.patch.node = nullptr;
+            }
+        }
+
+        wave.swap(nextWave);
+        tFinalize += std::chrono::duration<double>(Clock::now() - tPhase).count();
+    }
+
+    LOG_INFO_S << "TraversabilityGenerator3d: BFS breakdown over " << numWaves
+               << " waves: classify(par) " << tClassify << " s, collect(ser) "
+               << tCollect << " s, prefit(par) " << tPrefit << " s, finalize(ser) "
+               << tFinalize << " s.";
+
+    const auto tBfs = std::chrono::steady_clock::now();
     fillEnclosedUnknownRegions();
+    const auto tPockets = std::chrono::steady_clock::now();
     inflateFrontiers();
+    const auto tFrontiers = std::chrono::steady_clock::now();
     inflateObstacles();
+    const auto tObstacles = std::chrono::steady_clock::now();
+
+    const auto sec = [](std::chrono::steady_clock::time_point a,
+                        std::chrono::steady_clock::time_point b)
+    { return std::chrono::duration<double>(b - a).count(); };
+    LOG_INFO_S << "TraversabilityGenerator3d: expanded " << cnd << " nodes ("
+               << currentNodeId << " total in map) in "
+               << sec(expandStart, tObstacles) << " s (bfs " << sec(expandStart, tBfs)
+               << ", pockets " << sec(tBfs, tPockets)
+               << ", frontiers " << sec(tPockets, tFrontiers)
+               << ", obstacle inflation " << sec(tFrontiers, tObstacles) << ").";
 
 #ifdef ENABLE_DEBUG_DRAWINGS
     /*
@@ -1693,25 +2001,18 @@ void TraversabilityGenerator3d::inflateObstacles()
     // (a node can be reached from multiple obstacle sources)
     std::unordered_set<TravGenNode*> evaluatedNodes;
 
+    // Pass 1 (serial, cheap): walk the inflation bands of all obstacle seeds and
+    // collect the unique set of nodes to evaluate. The walk only depends on the
+    // graph and node types as they are NOW; evaluation results never change which
+    // nodes get collected (evaluatedNodes already deduplicated re-visits before).
+    std::vector<TravGenNode*> toEvaluate;
+
     for (TravGenNode *n : obstacleNodesGrowList)
     {
         // fillEnclosedUnknownRegions() may have refilled a former unmeasured obstacle to
         // TRAVERSABLE -- such nodes must not seed obstacle inflation anymore.
         if(n->getType() != TraversabilityNodeBase::OBSTACLE)
             continue;
-
-        // Check the obstacle node itself first to see if any orientation is safe
-        //if (n->getType() == TraversabilityNodeBase::OBSTACLE)
-        //{
-        //    if (evaluatedNodes.insert(n).second)
-        //    {
-        //        if (computeSafeOrientations(n))
-        //        {
-        //            n->setType(TraversabilityNodeBase::TRAVERSABLE);
-        //            n->getUserData().nodeType = NodeType::PARTIALLY_TRAVERSABLE;
-        //        }
-        //    }
-        //}
 
         const Index nIdx = n->getIndex();
         n->eachConnectedNode([&] (maps::grid::TraversabilityNodeBase *neighbor, bool &expandNode, bool &stop)
@@ -1737,19 +2038,7 @@ void TraversabilityGenerator3d::inflateObstacles()
                 {
                     if (evaluatedNodes.insert(node).second)
                     {
-                        if (computeSafeOrientations(node))
-                        {
-                            // Some orientations are safe — partially traversable
-                            neighbor->setType(TraversabilityNodeBase::TRAVERSABLE);
-                            node->getUserData().nodeType = NodeType::PARTIALLY_TRAVERSABLE;
-                        }
-                        else
-                        {
-                            // No safe orientation found: the robot cannot occupy this cell at
-                            // any yaw, so it is a plain obstacle (not merely footprint-inflated).
-                            neighbor->setType(TraversabilityNodeBase::OBSTACLE);
-                            node->getUserData().nodeType = NodeType::OBSTACLE;
-                        }
+                        toEvaluate.push_back(node);
                     }
                 }
                 expandNode = true;
@@ -1761,6 +2050,37 @@ void TraversabilityGenerator3d::inflateObstacles()
         }
         );
     }
+
+    // Pass 2 (parallel): the expensive per-node yaw sampling. computeSafeOrientations
+    // only reads the MLS and writes the node's OWN allowedOrientations, so distinct
+    // nodes evaluate concurrently without locking.
+    std::vector<uint8_t> hasSafeYaw(toEvaluate.size(), 0);
+    const std::int64_t numEval = static_cast<std::int64_t>(toEvaluate.size());
+    #pragma omp parallel for schedule(dynamic) if(numEval >= kMinParallelItems)
+    for(std::int64_t i = 0; i < numEval; i++)
+    {
+        hasSafeYaw[i] = computeSafeOrientations(toEvaluate[i]) ? 1 : 0;
+    }
+
+    // Pass 3 (serial): type writeback.
+    for(std::int64_t i = 0; i < numEval; i++)
+    {
+        TravGenNode* node = toEvaluate[i];
+        if (hasSafeYaw[i])
+        {
+            // Some orientations are safe — partially traversable
+            node->setType(TraversabilityNodeBase::TRAVERSABLE);
+            node->getUserData().nodeType = NodeType::PARTIALLY_TRAVERSABLE;
+        }
+        else
+        {
+            // No safe orientation found: the robot cannot occupy this cell at
+            // any yaw, so it is a plain obstacle (not merely footprint-inflated).
+            node->setType(TraversabilityNodeBase::OBSTACLE);
+            node->getUserData().nodeType = NodeType::OBSTACLE;
+        }
+    }
+
     obstacleNodesGrowList.clear();
 }
 
@@ -1939,44 +2259,21 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
     }
 
     node->setExpanded();
-    if(node->getType() == TraversabilityNodeBase::UNKNOWN)
-    {
-        return false;
-    }
 
-    if(node->getType() == TraversabilityNodeBase::OBSTACLE)
+    switch(classifyNode(node))
     {
-        obstacleNodesGrowList.push_back(node);
-        return false;
-    }
-
-    if(node->getUserData().slope > config.maxSlope){
-        node->setType(TraversabilityNodeBase::OBSTACLE);
-        node->getUserData().nodeType = NodeType::OBSTACLE;
-        obstacleNodesGrowList.push_back(node);
-        return false;
-    }
-    
-    if(!checkStepHeightAABB(node))
-    {
-        if(!checkStepHeightOBB(node))
-        {
+        case NodeClassification::Unknown:
+            return false;
+        case NodeClassification::PreexistingObstacle:
+            obstacleNodesGrowList.push_back(node);
+            return false;
+        case NodeClassification::Obstacle:
             node->setType(TraversabilityNodeBase::OBSTACLE);
             node->getUserData().nodeType = NodeType::OBSTACLE;
             obstacleNodesGrowList.push_back(node);
             return false;
-        }
-    } 
-    
-    if(config.enableInclineLimitting)
-    {
-        if(!computeAllowedOrientations(node))
-        {
-            node->setType(TraversabilityNodeBase::OBSTACLE);
-            node->getUserData().nodeType = NodeType::OBSTACLE;
-            obstacleNodesGrowList.push_back(node);
-            return false;
-        }
+        case NodeClassification::Traversable:
+            break;
     }
 
     //add surrounding
@@ -1994,6 +2291,42 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
     node->getUserData().nodeType = NodeType::TRAVERSABLE;
 
     return true;
+}
+
+TraversabilityGenerator3d::NodeClassification TraversabilityGenerator3d::classifyNode(TravGenNode* node)
+{
+    if(node->getType() == TraversabilityNodeBase::UNKNOWN)
+    {
+        return NodeClassification::Unknown;
+    }
+
+    if(node->getType() == TraversabilityNodeBase::OBSTACLE)
+    {
+        return NodeClassification::PreexistingObstacle;
+    }
+
+    if(node->getUserData().slope > config.maxSlope)
+    {
+        return NodeClassification::Obstacle;
+    }
+
+    if(!checkStepHeightAABB(node))
+    {
+        if(!checkStepHeightOBB(node))
+        {
+            return NodeClassification::Obstacle;
+        }
+    }
+
+    if(config.enableInclineLimitting)
+    {
+        if(!computeAllowedOrientations(node))
+        {
+            return NodeClassification::Obstacle;
+        }
+    }
+
+    return NodeClassification::Traversable;
 }
 
 bool TraversabilityGenerator3d::isNodeFreeOfObstacles(const traversability_generator3d::TravGenNode* node) const
@@ -2026,16 +2359,16 @@ bool TraversabilityGenerator3d::isNodeFreeOfObstacles(const traversability_gener
 }
 
 
-TravGenNode *TraversabilityGenerator3d::createTraversabilityPatchAt(maps::grid::Index idx, const double curHeight)
+TraversabilityGenerator3d::PrefitPatch TraversabilityGenerator3d::buildPatchNodeAt(const maps::grid::Index& idx, const double curHeight)
 {
-    TravGenNode *ret = nullptr;
+    PrefitPatch result;
 
     maps::grid::Vector3d globalPos;
     trMap.fromGrid(idx, globalPos);
     Index mlsIdx;
     if(!mlsGrid->toGrid(globalPos, mlsIdx))
     {
-        return nullptr;
+        return result;
     }
 
     const auto& patches = mlsGrid->at(mlsIdx);
@@ -2061,8 +2394,7 @@ TravGenNode *TraversabilityGenerator3d::createTraversabilityPatchAt(maps::grid::
     //if there is no support, the ransac will filter the node out
     candidates.push_back(curHeight);
 
-    ret = new TravGenNode(0.0, idx);
-    ret->getUserData().id = currentNodeId++;
+    TravGenNode* ret = new TravGenNode(0.0, idx);
     ret->getUserData().cost = 0;
 
     for(double height: candidates)
@@ -2088,10 +2420,9 @@ TravGenNode *TraversabilityGenerator3d::createTraversabilityPatchAt(maps::grid::
 
         if((ret->getHeight() - config.maxStepHeight) <= curHeight && (ret->getHeight() + config.maxStepHeight) >= curHeight)
         {
-            trMap.at(idx).insert(ret);
-            if(!planeOk)
-                unmeasuredNodesList.push_back(ret);
-            return ret;
+            result.node = ret;
+            result.unmeasured = !planeOk;
+            return result;
         }
         else
         {
@@ -2105,8 +2436,25 @@ TravGenNode *TraversabilityGenerator3d::createTraversabilityPatchAt(maps::grid::
     ret->setNotExpanded();
     ret->setType(TraversabilityNodeBase::OBSTACLE);
     ret->getUserData().nodeType = NodeType::OBSTACLE;
-    trMap.at(idx).insert(ret);
-    return ret;
+    result.node = ret;
+    result.unmeasured = false;
+    return result;
+}
+
+TravGenNode* TraversabilityGenerator3d::finishPatchNode(const PrefitPatch& prefit, const maps::grid::Index& idx)
+{
+    if(!prefit.node)
+        return nullptr;
+    prefit.node->getUserData().id = currentNodeId++;
+    trMap.at(idx).insert(prefit.node);
+    if(prefit.unmeasured)
+        unmeasuredNodesList.push_back(prefit.node);
+    return prefit.node;
+}
+
+TravGenNode *TraversabilityGenerator3d::createTraversabilityPatchAt(maps::grid::Index idx, const double curHeight)
+{
+    return finishPatchNode(buildPatchNodeAt(idx, curHeight), idx);
 }
 
 TravGenNode* TraversabilityGenerator3d::findMatchingTraversabilityPatchAt(Index idx, const double curHeight) const
@@ -2131,70 +2479,85 @@ TravGenNode* TraversabilityGenerator3d::findMatchingTraversabilityPatchAt(Index 
     return nullptr;
 }
 
+TraversabilityGenerator3d::NeighborRequest TraversabilityGenerator3d::computeNeighborRequest(
+    const TravGenNode* node, const Index& idxS, Index& outIdx, double& outHeight) const
+{
+    outIdx = Index(node->getIndex() + idxS);
+
+    if(!trMap.inGrid(outIdx))
+    {
+        return NeighborRequest::Skip;
+    }
+
+    //compute height of cell in respect to plane
+    const Vector3d patchPosPlane(idxS.x() * trMap.getResolution().x(), idxS.y() * trMap.getResolution().y(), 0);
+    const Eigen::ParametrizedLine<double, 3> line(patchPosPlane, Eigen::Vector3d::UnitZ());
+    const Eigen::Vector3d newPos = line.intersectionPoint(node->getUserData().plane);
+
+    // If XY differs more than tolerance, something is off
+    constexpr double kXYTolerance = 1e-3;
+    const Eigen::Vector2d delta = patchPosPlane.head<2>() - newPos.head<2>();
+    const double deltaNorm = delta.norm();
+
+    if (deltaNorm > kXYTolerance) {
+        LOG_ERROR_S << "TraversabilityGenerator3d: Adjustment height check failed — "
+                    << "|Δxy|=" << deltaNorm << " > tol=" << kXYTolerance
+                    << ", patchXY=(" << patchPosPlane.x() << ", " << patchPosPlane.y() << ")"
+                    << ", newXY=(" << newPos.x() << ", " << newPos.y() << ")";
+        return NeighborRequest::Abort;
+    }
+    outHeight = newPos.z();
+    //The new patch is not reachable from the current patch
+    if(fabs(outHeight - node->getHeight()) > config.maxStepHeight)
+    {
+        return NeighborRequest::Skip;
+    }
+
+    if (!newPos.allFinite()) {
+        LOG_ERROR_S << "TraversabilityGenerator3d: newPos contains non-finite values: "
+                    << newPos.transpose();
+        return NeighborRequest::Skip;
+    }
+    return NeighborRequest::Ok;
+}
+
 void TraversabilityGenerator3d::addConnectedPatches(TravGenNode *  node)
 {
-    static std::vector<Index> surounding = {
-        Index(1, 1),
-        Index(1, 0),
-        Index(1, -1),
-        Index(0, 1),
-        Index(0, -1),
-        Index(-1, 1),
-        Index(-1, 0),
-        Index(-1, -1)};
+    addConnectedPatches(node, nullptr);
+}
 
-    double curHeight = node->getHeight();
-    for(const Index &idxS : surounding)
+void TraversabilityGenerator3d::addConnectedPatches(TravGenNode* node, PrefitCache* prefits)
+{
+    for(const Index &idxS : kNeighborOffsets)
     {
-        const Index idx(node->getIndex() + idxS);
-
-        if(!trMap.inGrid(idx))
+        Index idx;
+        double localHeight = 0.0;
+        const NeighborRequest req = computeNeighborRequest(node, idxS, idx, localHeight);
+        if(req == NeighborRequest::Abort)
         {
-            continue;
-        }
-
-        //compute height of cell in respect to plane
-        const Vector3d patchPosPlane(idxS.x() * trMap.getResolution().x(), idxS.y() * trMap.getResolution().y(), 0);
-        const Eigen::ParametrizedLine<double, 3> line(patchPosPlane, Eigen::Vector3d::UnitZ());
-        const Eigen::Vector3d newPos = line.intersectionPoint(node->getUserData().plane);
-
-        // If XY differs more than tolerance, something is off
-        constexpr double kXYTolerance = 1e-3;
-        const Eigen::Vector2d delta = patchPosPlane.head<2>() - newPos.head<2>();
-        const double deltaNorm = delta.norm();
-
-        if (deltaNorm > kXYTolerance) {
-            LOG_ERROR_S << "TraversabilityGenerator3d: Adjustment height check failed — "
-                        << "|Δxy|=" << deltaNorm << " > tol=" << kXYTolerance
-                        << ", patchXY=(" << patchPosPlane.x() << ", " << patchPosPlane.y() << ")"
-                        << ", newXY=(" << newPos.x() << ", " << newPos.y() << ")";
             return;
         }
-        const double localHeight = newPos.z();
-        //The new patch is not reachable from the current patch
-        if(fabs(localHeight - curHeight) > config.maxStepHeight)
+        if(req == NeighborRequest::Skip)
         {
-//#ifdef ENABLE_DEBUG_DRAWINGS
-//            V3DD::COMPLEX_DRAWING([&]()
-//            {
-//                maps::grid::Vector3d pos;
-//                trMap.fromGrid(node->getIndex(), pos, node->getHeight(), false);
-//                V3DD::DRAW_SPHERE("traversability_generator3d_expandFailStepHeight", pos, 0.05, V3DD::Color::carrot_orange);
-//            });
-//#endif
             continue;
         }
 
-
-        TravGenNode *toAdd = nullptr;
-
-        if (!newPos.allFinite()) {
-            LOG_ERROR_S << "TraversabilityGenerator3d: newPos contains non-finite values: "
-                        << newPos.transpose();
-            continue;
-        }
         //check if we got an existing node
-        toAdd = findMatchingTraversabilityPatchAt(idx, localHeight);
+        TravGenNode *toAdd = findMatchingTraversabilityPatchAt(idx, localHeight);
+
+        if(!toAdd && prefits)
+        {
+            // Consume a node pre-fitted by the parallel wave phase -- but only if it
+            // was fitted for exactly this request. A same-cell request at another
+            // height (rare multi-level case) falls through to the serial creation.
+            auto it = prefits->find(cellKey(idx));
+            if(it != prefits->end() && it->second.patch.node != nullptr &&
+               std::abs(it->second.requestHeight - localHeight) < 1e-9)
+            {
+                toAdd = finishPatchNode(it->second.patch, idx);
+                it->second.patch.node = nullptr;
+            }
+        }
 
         //no existing node exists at that location.
         //try to create a new one at the position

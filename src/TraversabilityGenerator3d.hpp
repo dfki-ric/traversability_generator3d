@@ -2,6 +2,8 @@
 
 #include <maps/grid/MLSMap.hpp>
 #include <memory>
+#include <cstdint>
+#include <unordered_map>
 #include "TraversabilityConfig.hpp"
 #include "TravGenNode.hpp"
 #include "SoilNode.hpp"
@@ -96,12 +98,32 @@ protected:
     bool checkStepHeightAABB(TravGenNode* node);
     bool checkStepHeightOBB(TravGenNode* node);
     
-    /** Check if the robot at a specific yaw orientation collides with MLS patches.
-     *  @return true if the yaw is collision-free (safe). */
-    bool checkCollisionForYaw(TravGenNode* node, double yaw);
+    /** One MLS patch prepared for the per-yaw collision checks of one node: the
+     *  CGAL polyhedron (yaw-INdependent, so built once per node instead of once
+     *  per yaw sample), its cell centre and top height for the cheap per-yaw
+     *  prefilters, and the raw patch for the debug drawings. */
+    struct YawCheckPatch
+    {
+        Polyhedron_3 poly;
+        Eigen::Vector2d cellXY;
+        double zMax;
+        const maps::grid::SurfacePatch<maps::grid::MLSConfig::SLOPE>* patch;
+        Eigen::Vector3d pos;
+    };
 
-    /** Sample config.numYawSamples yaws over [0,180deg) (mirrored to [180,360)), and if any are
-     *  collision-free, fill node->allowedOrientations with a wedge (width = sampling step) per
+    /** Build the patch polyhedra of the node's rotation-safe search window once;
+     *  checkCollisionForYaw() reuses them for every sampled yaw. */
+    std::vector<YawCheckPatch> collectYawCheckPatches(TravGenNode* node);
+
+    /** Check if the robot at a specific yaw orientation collides with MLS patches
+     *  (@p patches from collectYawCheckPatches() of the same node).
+     *  @return true if the yaw is collision-free (safe). */
+    bool checkCollisionForYaw(TravGenNode* node, double yaw,
+                              const std::vector<YawCheckPatch>& patches);
+
+    /** Sample exactly config.numYawSamples yaws over the full circle [0,360deg)
+     *  (footprint offset applied to every check), and if any are collision-free,
+     *  fill node->allowedOrientations with a wedge (width = sampling step) per
      *  safe yaw. @return true if at least one safe orientation was found. */
     bool computeSafeOrientations(TravGenNode* node);
     
@@ -109,8 +131,62 @@ protected:
     bool computeAllowedOrientations(TravGenNode* node);
     
     bool checkForFrontier(const TravGenNode* node);
-    
+
+    /** Outcome of the read-only expansion checks; see classifyNode(). */
+    enum class NodeClassification : uint8_t
+    {
+        Unknown,              ///< node type is UNKNOWN: skip
+        PreexistingObstacle,  ///< node was already OBSTACLE: seed inflation only
+        Obstacle,             ///< failed slope / step-height / incline checks
+        Traversable           ///< passed all checks
+    };
+
+    /** The read-only half of expandNode(): slope, step-height (AABB with OBB
+     *  fallback) and incline-limit checks. Reads only the MLS/trMap geometry and
+     *  writes only the node's OWN userData (allowedOrientations), so DISTINCT
+     *  nodes may be classified concurrently from multiple threads. */
+    NodeClassification classifyNode(TravGenNode* node);
+
+    /** A node fitted by buildPatchNodeAt() but not yet part of the map: no id,
+     *  not inserted into trMap, not registered in unmeasuredNodesList. */
+    struct PrefitPatch
+    {
+        TravGenNode* node = nullptr;
+        bool unmeasured = false;
+    };
+
+    /** The read-only (fitting) half of createTraversabilityPatchAt(): candidate
+     *  heights from the MLS plus the RANSAC plane fits. Safe to run concurrently
+     *  for distinct cells. */
+    PrefitPatch buildPatchNodeAt(const maps::grid::Index& idx, const double curHeight);
+
+    /** Serial completion of buildPatchNodeAt(): assigns the node id, inserts the
+     *  node into trMap and registers unmeasured nodes. Must run single-threaded. */
+    TravGenNode* finishPatchNode(const PrefitPatch& prefit, const maps::grid::Index& idx);
+
+    /** One cell pre-fitted during the parallel phase of an expansion wave. */
+    struct PrefitEntry
+    {
+        maps::grid::Index idx;
+        double requestHeight;
+        PrefitPatch patch;
+    };
+    typedef std::unordered_map<uint64_t, PrefitEntry> PrefitCache;
+
+    enum class NeighborRequest : uint8_t { Ok, Skip, Abort };
+
+    /** The neighbor projection addConnectedPatches() performs before matching or
+     *  creating a neighbor node in direction @p idxS: output cell and height.
+     *  Abort mirrors the historical early-return of addConnectedPatches() on an
+     *  inconsistent plane intersection (remaining neighbors are not processed). */
+    NeighborRequest computeNeighborRequest(const TravGenNode* node, const maps::grid::Index& idxS,
+                                           maps::grid::Index& outIdx, double& outHeight) const;
+
     void addConnectedPatches(TravGenNode* node);
+
+    /** addConnectedPatches() variant that consumes nodes pre-fitted by the
+     *  parallel wave phase instead of fitting them inline. */
+    void addConnectedPatches(TravGenNode* node, PrefitCache* prefits);
 
     bool getConnectedPatch(const maps::grid::Index& idx, double height, const Patch*& patch);
     

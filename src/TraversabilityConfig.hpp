@@ -45,6 +45,7 @@ public:
         , traverseConcrete(true)
         , articulatedSuspension(true)
         , numYawSamples(12)
+        , numThreads(0)
     {};
 
     /** The maximum step height that the robot can traverse.
@@ -126,9 +127,17 @@ public:
     bool traverseConcrete;
     bool articulatedSuspension;
 
-    /** Number of yaw samples tested over [0,180deg) when computing the allowed orientations of a
-     *  partially traversable cell (mirrored to [180,360)). Higher = finer angular resolution but
-     *  slower map generation. Step = 180deg / numYawSamples (e.g. 12 -> 15deg). */
+    /** Number of yaw samples tested over the full circle [0,360deg) when computing the allowed
+     *  orientations of a partially traversable cell. This is the exact collision-check count per
+     *  cell, independent of the footprint offset. Higher = finer angular resolution but slower
+     *  map generation. Step = 360deg / numYawSamples (e.g. 12 -> 30deg). */
     int numYawSamples;
+
+    /** Number of OpenMP threads used by the wave-parallel map expansion (applied at the start
+     *  of expandAll). 0 = do NOT parallelize: the expansion runs single-threaded on the
+     *  calling thread (no OpenMP worker team). N > 0 = use exactly N threads. The map is
+     *  identical for every value by design. ugv_nav4d_ros2 overwrites this with its planner
+     *  numThreads parameter so one knob controls planning AND map generation. */
+    int numThreads;
 };
 }

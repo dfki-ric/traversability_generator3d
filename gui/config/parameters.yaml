@@ -26,13 +26,21 @@ travConfig:
   # traversability estimation
   costFunctionDist: 0.0
   minTraversablePercentage: 0.4
+  # yaw checks over the full circle for partial-cell allowed orientations
+  # (12 -> 30deg step), independent of the footprint offset
+  numYawSamples: 12
+  # OpenMP threads for the wave-parallel expansion.
+  # 0 = do NOT parallelize (single-threaded); N > 0 = exactly N threads.
+  # In the GUI, leave headroom for the llvmpipe render threads: 8 measured
+  # faster than 16 on a loaded 16-CPU desktop.
+  numThreads: 4
 
   # movement logic
   allowForwardDownhill: true
   enableInclineLimitting: false
 
   # soil information
-  useSoilInformation: true
+  useSoilInformation: false
   traverseSand: false
   traverseRocks: false
   traverseGravel: true
