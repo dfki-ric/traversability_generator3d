@@ -17,6 +17,7 @@
 #include <traversability_generator3d/TraversabilityConfig.hpp>
 #include <traversability_generator3d/TraversabilityGenerator3d.hpp>
 #include <traversability_generator3d/SoilNode.hpp>
+#include <osg/MatrixTransform>
 #endif
 
 class QPushButton;
@@ -44,10 +45,13 @@ public slots:
     void picked(float x, float y,float z, int buttonMask, int modifierMask);
     void expandAll();
     void resetTravMap();
+    void onYawChanged(double deg);
 
 private:
     void loadMls(const std::string& path);
     void loadTravConfigFromYaml(const std::string& path);
+    void setupRobotBoxViz();
+    void updateRobotBoxTransform();
     std::vector<traversability_generator3d::SoilSample> soilSamplesList;
     void applySoilInformationToGenerator();
 
@@ -74,5 +78,8 @@ private:
     QDoubleSpinBox* sigmaYSpin = nullptr;
     QDoubleSpinBox* uncertaintySpin = nullptr;
     QLabel* soilHintLabel = nullptr;
+
+    QDoubleSpinBox* yawSpin_ = nullptr;
+    osg::ref_ptr<osg::MatrixTransform> robotBoxTransform_;
 
 };
