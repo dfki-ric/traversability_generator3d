@@ -84,49 +84,59 @@ uint64_t cellKey(const Index& idx)
  *  (llvmpipe render threads competing for cores) each launch can cost
  *  milliseconds — hundreds of tiny BFS waves then dominate the runtime. */
 constexpr std::int64_t kMinParallelItems = 32;
+
+/** Result of forEachPatchInBox(). */
+enum class PatchWalk { OutsideGrid, Completed, Aborted };
+
+/** Shared MLS box walker used by the step-height checks and the yaw-check patch
+ *  collection: intersect the cuboid, iterate ALL cells of the view (inclusive
+ *  bounds -- for collision checks the conservative direction is inclusion) and
+ *  hand every patch with its cell-centre position to @p f. @p f returns false
+ *  to abort the walk. */
+template <typename F>
+PatchWalk forEachPatchInBox(TraversabilityGenerator3d::MLGrid& grid,
+                            const Eigen::AlignedBox3d& box, F&& f)
+{
+    TraversabilityGenerator3d::MLGrid::View area = grid.intersectCuboid(box);
+
+    Index minIdx, maxIdx;
+    if (!grid.toGrid(box.min(), minIdx) || !grid.toGrid(box.max(), maxIdx))
+        return PatchWalk::OutsideGrid;
+
+    if (area.getNumCells().y() <= 0 || area.getNumCells().x() <= 0)
+        return PatchWalk::Completed;
+
+    Index curIndex = minIdx;
+    for (size_t y = 0; y < area.getNumCells().y(); y++, curIndex.y() += 1)
+    {
+        curIndex.x() = minIdx.x();
+        for (size_t x = 0; x < area.getNumCells().x(); x++, curIndex.x() += 1)
+        {
+            Eigen::Vector3d pos;
+            if (!grid.fromGrid(curIndex, pos))
+            {
+                LOG_ERROR_S << "TraversabilityGenerator3d: fromGrid failed for grid index "
+                            << curIndex << " — index outside MLS grid bounds.";
+                continue;
+            }
+
+            for (const SurfacePatch<MLSConfig::SLOPE>* p : area.at(x, y))
+            {
+                if (!f(p, pos))
+                    return PatchWalk::Aborted;
+            }
+        }
+    }
+    return PatchWalk::Completed;
+}
 }
 
 TraversabilityGenerator3d::TraversabilityGenerator3d(const TraversabilityConfig& config)
-    : addInitialPatch(false), config(config), patchHeight(0.02) // Set default patchHeight
+    : addInitialPatch(false), config(config)
 {
     warnOnDegenerateFootprint(config);
     trMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
     soilMap.setResolution(Eigen::Vector2d(config.gridResolution, config.gridResolution));
-
-    const double offX = config.footprintOffsetX;
-    double robotHalfLength = config.robotSizeX / 2.0;
-    double robotHalfWidth = config.robotSizeY / 2.0;
-    double robotHalfHeight = config.robotHeight / 2.0;
-
-    robotEdges = {
-        {offX + robotHalfLength, robotHalfWidth, robotHalfHeight},    // Top-right-front
-        {offX + robotHalfLength, robotHalfWidth, -robotHalfHeight},   // Top-right-back
-        {offX + robotHalfLength, -robotHalfWidth, robotHalfHeight},   // Bottom-right-front
-        {offX + robotHalfLength, -robotHalfWidth, -robotHalfHeight},  // Bottom-right-back
-        {offX - robotHalfLength, robotHalfWidth, robotHalfHeight},    // Top-left-front
-        {offX - robotHalfLength, robotHalfWidth, -robotHalfHeight},   // Top-left-back
-        {offX - robotHalfLength, -robotHalfWidth, robotHalfHeight},   // Bottom-left-front
-        {offX - robotHalfLength, -robotHalfWidth, -robotHalfHeight}   // Bottom-left-back
-    };
-
-    robotPolyhedron = generatePolyhedron(robotEdges);
-
-    double patchHalfLength = config.gridResolution / 2.0;
-    double patchHalfWidth = config.gridResolution / 2.0;
-    double patchHalfHeight = patchHeight / 2.0;
-
-    patchEdges = {
-        {patchHalfLength, patchHalfWidth, patchHalfHeight},    // Top-right-front
-        {patchHalfLength, patchHalfWidth, -patchHalfHeight},   // Top-right-back
-        {patchHalfLength, -patchHalfWidth, patchHalfHeight},   // Bottom-right-front
-        {patchHalfLength, -patchHalfWidth, -patchHalfHeight},  // Bottom-right-back
-        {-patchHalfLength, patchHalfWidth, patchHalfHeight},   // Top-left-front
-        {-patchHalfLength, patchHalfWidth, -patchHalfHeight},  // Top-left-back
-        {-patchHalfLength, -patchHalfWidth, patchHalfHeight},  // Bottom-left-front
-        {-patchHalfLength, -patchHalfWidth, -patchHalfHeight}  // Bottom-left-back
-    };
-
-    patchPolyhedron = generatePolyhedron(patchEdges);
 }
 
 Polyhedron_3 TraversabilityGenerator3d::generatePolyhedron(const std::vector<Eigen::Vector3d>& points) {
@@ -151,30 +161,6 @@ Polyhedron_3 TraversabilityGenerator3d::generatePolyhedron(const std::vector<Eig
     CGAL::convex_hull_3(cgal_p3.begin(), cgal_p3.end(), polyhedron);
 
     return polyhedron;
-}
-
-void TraversabilityGenerator3d::transformPolyhedron(Polyhedron_3& polyhedron, const Transformation& transform){
-    // Apply the combined transformation to each point in the polyhedron
-    std::transform(polyhedron.points_begin(), polyhedron.points_end(), polyhedron.points_begin(), transform);
-}
-
-Transformation TraversabilityGenerator3d::generateTransform(const Eigen::Vector3d& normal, const Eigen::Vector3d& translation){
-
-    Eigen::Vector3d current_up(0, 0, 1);
-    Eigen::Quaterniond rotation_quaternion = Eigen::Quaterniond::FromTwoVectors(current_up, normal);
-
-    Eigen::Matrix3d rotation_matrix = rotation_quaternion.toRotationMatrix();
-
-    Transformation rotate(
-        rotation_matrix(0, 0), rotation_matrix(0, 1), rotation_matrix(0, 2), 0,
-        rotation_matrix(1, 0), rotation_matrix(1, 1), rotation_matrix(1, 2), 0,
-        rotation_matrix(2, 0), rotation_matrix(2, 1), rotation_matrix(2, 2), 0
-    );
-    Vector_3 translation_vector(translation.x(), translation.y(), translation.z());
-    Transformation translate(CGAL::TRANSLATION, translation_vector);
-
-    Transformation combined = translate * rotate;
-    return combined;    
 }
 
 TraversabilityGenerator3d::~TraversabilityGenerator3d()
@@ -246,7 +232,7 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
     // contribute at least one ground patch, so cells with only walls/overhead don't inflate it.
     const int patchCntTotal = area.getNumCells().y() * area.getNumCells().x();
     // Reject patches steeper than maxSlope (walls, curbs): they are not ground and would
-    // otherwise pull the fitted plane. Mirrors the idiom in sampleTerrainHeightAtCorner().
+    // otherwise pull the fitted plane.
     // NOTE: we deliberately do NOT gate patches by height around the node's *tentative*
     // height here -- RANSAC is what determines the plane/height, and pre-filtering to a
     // narrow band breaks hole-filling and slope fits (leaves UNKNOWN holes). The search
@@ -283,13 +269,14 @@ bool TraversabilityGenerator3d::computePlaneRansac(TravGenNode& node)
     }
 
 
-    //if less than 5 planes -> hole
-    //TODO where to implement ? here or in check obstacles ?
-    if(patchCnt < 5)
+    // Reject holes here, before constructing and running the comparatively expensive
+    // RANSAC segmenter.
+    constexpr int minimumPatchCount = 5;
+    if(patchCnt < minimumPatchCount)
     {
         //ransac will not produce a result below 5 points
         LOG_DEBUG_S << "TraversabilityGenerator3d: RANSAC plane fitting skipped: only " << patchCnt
-            << " patches available (minimum required: 5)";
+            << " patches available (minimum required: " << minimumPatchCount << ")";
         return false;
     }
 
@@ -476,170 +463,6 @@ Eigen::Vector3d TraversabilityGenerator3d::computeSlopeDirection(const Eigen::Hy
     return projection;
 }
 
-double TraversabilityGenerator3d::sampleTerrainHeightAtCorner(const Eigen::Vector3d& nodePos, double cornerX, double cornerY) const
-{
-    Eigen::Vector3d cornerPos = nodePos;
-    cornerPos.x() += cornerX;
-    cornerPos.y() += cornerY;
-
-    const double searchRadius = config.gridResolution;
-    const double robotDiagHalf = footprintMaxReach(config);
-    const double vertSearchRange = robotDiagHalf * std::sin(config.maxSlope) + config.maxStepHeight;
-    Eigen::Vector3d searchMin = cornerPos - Eigen::Vector3d(searchRadius, searchRadius, vertSearchRange);
-    Eigen::Vector3d searchMax = cornerPos + Eigen::Vector3d(searchRadius, searchRadius, vertSearchRange);
-
-    View area = mlsGrid->intersectCuboid(Eigen::AlignedBox3d(searchMin, searchMax));
-
-    Index minIdx;
-    if (!mlsGrid->toGrid(searchMin, minIdx))
-    {
-        Index cornerIdx;
-        if (mlsGrid->toGrid(cornerPos, cornerIdx))
-        {
-            minIdx = Index(cornerIdx.x() - 1, cornerIdx.y() - 1);
-        }
-        else
-        {
-            minIdx = Index(0, 0);
-        }
-    }
-
-    double minDistance2DSq = std::numeric_limits<double>::max();
-    double bestHeight = nodePos.z() - vertSearchRange;
-
-    for(size_t y = 0; y < area.getNumCells().y(); y++)
-    {
-        for(size_t x = 0; x < area.getNumCells().x(); x++)
-        {
-            Index curIndex = minIdx + Index(x, y);
-            Eigen::Vector3d cellPos;
-            if (!mlsGrid->fromGrid(curIndex, cellPos))
-                continue;
-
-            double dx = cellPos.x() - cornerPos.x();
-            double dy = cellPos.y() - cornerPos.y();
-            double dist2DSq = dx * dx + dy * dy;
-
-            for(const SurfacePatch<MLSConfig::SLOPE> *p : area.at(x, y))
-            {
-                // Check if it's a valid ground patch (not a wall/steep slope)
-                Eigen::Vector3f normalf = p->getNormal();
-                Eigen::Vector3d normal{normalf.x(), normalf.y(), normalf.z()};
-                normal.normalize();
-                if (std::abs(normal.z()) < std::cos(config.maxSlope))
-                    continue;
-
-                double h = (p->getTop() + p->getBottom()) / 2.0;
-                if(std::abs(h - nodePos.z()) <= vertSearchRange)
-                {
-                    // Prioritize closer cells in 2D
-                    if (dist2DSq < minDistance2DSq)
-                    {
-                        minDistance2DSq = dist2DSq;
-                        bestHeight = h;
-                    }
-                    // If they are in the same cell, take the one closer in height to the center nodePos
-                    else if (std::abs(dist2DSq - minDistance2DSq) < 1e-5)
-                    {
-                        if (std::abs(h - nodePos.z()) < std::abs(bestHeight - nodePos.z()))
-                        {
-                            bestHeight = h;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    return bestHeight;
-}
-
-Eigen::Vector3d TraversabilityGenerator3d::computeContactPlaneFromCorners(const std::vector<Eigen::Vector3d>& cornerPositions)
-{
-    // Fit plane through corner points using PCA
-    Eigen::Vector3d centroid = Eigen::Vector3d::Zero();
-    for(const auto& p : cornerPositions)
-        centroid += p;
-    centroid /= static_cast<double>(cornerPositions.size());
-
-    Eigen::Matrix3d cov = Eigen::Matrix3d::Zero();
-    for(const auto& p : cornerPositions)
-    {
-        Eigen::Vector3d centered = p - centroid;
-        cov += centered * centered.transpose();
-    }
-    cov /= static_cast<double>(cornerPositions.size());
-
-    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> solver(cov);
-    Eigen::Vector3d normal = solver.eigenvectors().col(0); // smallest eigenvalue = plane normal
-    normal.normalize();
-    if(normal.z() < 0)
-        normal = -normal;
-    return normal;
-}
-
-std::vector<Eigen::Vector3d> TraversabilityGenerator3d::compute4PointContactPositions(const Eigen::Vector3d& nodePos)
-{
-    // Returns 4 lower OBB corners in perimeter order: +X+Y, +X-Y, -X-Y, -X+Y
-    // Each at terrain height + maxStepHeight (bottom of robot body)
-    const double offX = config.footprintOffsetX;
-    const double hx = config.robotSizeX / 2.0;
-    const double hy = config.robotSizeY / 2.0;
-    return {
-        {nodePos.x() + offX + hx, nodePos.y() + hy, sampleTerrainHeightAtCorner(nodePos, offX + hx,  hy) + config.maxStepHeight},
-        {nodePos.x() + offX + hx, nodePos.y() - hy, sampleTerrainHeightAtCorner(nodePos, offX + hx, -hy) + config.maxStepHeight},
-        {nodePos.x() + offX - hx, nodePos.y() - hy, sampleTerrainHeightAtCorner(nodePos, offX - hx, -hy) + config.maxStepHeight},
-        {nodePos.x() + offX - hx, nodePos.y() + hy, sampleTerrainHeightAtCorner(nodePos, offX - hx,  hy) + config.maxStepHeight},
-    };
-}
-
-std::vector<Eigen::Vector3d> TraversabilityGenerator3d::computeRigidRobotCorners(
-    const std::vector<Eigen::Vector3d>& cornerPositions, 
-    const Eigen::Vector3d& contactNormal, 
-    double yaw, 
-    const Eigen::Vector3d& nodePos)
-{
-    const double offX = config.footprintOffsetX;
-    const double hx = config.robotSizeX / 2.0;
-    const double hy = config.robotSizeY / 2.0;
-
-    Eigen::Vector3d up(0, 0, 1);
-    Eigen::Quaterniond slopeRotation = Eigen::Quaterniond::FromTwoVectors(up, contactNormal);
-    Eigen::AngleAxisd yawRotation(yaw, Eigen::Vector3d::UnitZ());
-    Eigen::Matrix3d R = (slopeRotation * yawRotation).toRotationMatrix();
-
-    std::vector<Eigen::Vector3d> localCorners = {
-        {offX + hx,  hy, 0.0},
-        {offX + hx, -hy, 0.0},
-        {offX - hx, -hy, 0.0},
-        {offX - hx,  hy, 0.0}
-    };
-
-    std::vector<Eigen::Vector3d> rotatedCorners;
-    rotatedCorners.reserve(4);
-    for(const auto& lc : localCorners)
-    {
-        rotatedCorners.push_back(R * lc);
-    }
-
-    // Find the height z_center of the flat bottom plane's center
-    double z_center = -1e9;
-    for(size_t i = 0; i < 4; ++i)
-    {
-        double reqZ = cornerPositions[i].z() - rotatedCorners[i].z();
-        if(reqZ > z_center)
-            z_center = reqZ;
-    }
-
-    std::vector<Eigen::Vector3d> flatBottomCorners;
-    flatBottomCorners.reserve(4);
-    for(const auto& rc : rotatedCorners)
-    {
-        flatBottomCorners.push_back(Eigen::Vector3d(nodePos.x(), nodePos.y(), z_center) + rc);
-    }
-
-    return flatBottomCorners;
-}
-
 bool TraversabilityGenerator3d::checkForFrontier(const TravGenNode* node)
 {
     //check direct neighborhood for missing connected patches. If
@@ -657,34 +480,176 @@ bool TraversabilityGenerator3d::checkForFrontier(const TravGenNode* node)
 }
 
 
-void TraversabilityGenerator3d::drawWireFrameBox(const Eigen::Vector3d& normal, const Eigen::Vector3d& position, const Eigen::Vector3d& size, const Eigen::Vector4d& colorRGBA){
-    Transformation transform = generateTransform(normal, position);
+Eigen::AlignedBox3d TraversabilityGenerator3d::rotationSafeSearchBox(const Eigen::Vector3d& nodePos) const
+{
+    // Covers the footprint at EVERY yaw (offset-aware max reach); the z range is
+    // widened by the plane's possible drop/rise across the footprint so patches
+    // under the downhill corners are not missed on slopes.
+    const double halfDiag = footprintMaxReach(config);
+    const double zSlack = halfDiag * std::tan(config.maxSlope);
+    return Eigen::AlignedBox3d(
+        nodePos + Eigen::Vector3d(-halfDiag, -halfDiag, config.maxStepHeight - zSlack),
+        nodePos + Eigen::Vector3d( halfDiag,  halfDiag,
+                                   config.maxStepHeight + config.robotHeight + zSlack));
+}
 
-    Eigen::Matrix3d rotation_matrix;
-    for (int i = 0; i < 3; ++i) {
-        for (int j = 0; j < 3; ++j) {
-            rotation_matrix(i, j) = transform.m(i, j); // Access rotation part of the matrix
-        }
+TraversabilityGenerator3d::BodyHull TraversabilityGenerator3d::buildBodyPolyhedron(
+    const Eigen::Vector3d& nodePos, const Eigen::Hyperplane<double, 3>& plane, double yaw)
+{
+    BodyHull hull;
+
+    // Reference surface: the node's fitted ground plane. Sampling "terrain" under
+    // the corners would happily pick obstacle patches and hoist the modelled body
+    // onto the very obstacle it should collide with; the fitted plane comes from
+    // the ground fit, where walls and thick patches are excluded.
+    Eigen::Vector3d planeNormal = plane.normal();
+    if (!planeNormal.allFinite() || planeNormal.norm() < 1e-6 || std::abs(planeNormal.z()) < 1e-6)
+        planeNormal = Eigen::Vector3d::UnitZ();
+    else
+    {
+        planeNormal.normalize();
+        if (planeNormal.z() < 0.0)
+            planeNormal = -planeNormal;
+    }
+    hull.planeNormal = planeNormal;
+
+    //ground plane z at an xy offset from the node centre (the plane passes through nodePos)
+    auto planeZAt = [&](double dx, double dy)
+    {
+        return nodePos.z() - (planeNormal.x() * dx + planeNormal.y() * dy) / planeNormal.z();
+    };
+
+    // 4 lower corners of the robot OBB (offset along the body x axis), rotated by
+    // yaw, resting on the ground plane with maxStepHeight clearance.
+    const double offX = config.footprintOffsetX;
+    const double hx = config.robotSizeX / 2.0;
+    const double hy = config.robotSizeY / 2.0;
+    const Eigen::AngleAxisd yawRotation(yaw, Eigen::Vector3d::UnitZ());
+    const std::vector<Eigen::Vector3d> localCorners = {
+        {offX + hx,  hy, 0.0},
+        {offX + hx, -hy, 0.0},
+        {offX - hx, -hy, 0.0},
+        {offX - hx,  hy, 0.0},
+    };
+
+    hull.bottomCorners.reserve(4);
+    for (const Eigen::Vector3d& lc : localCorners)
+    {
+        const Eigen::Vector3d rotated = yawRotation * lc;
+        hull.bottomCorners.push_back({nodePos.x() + rotated.x(),
+                                      nodePos.y() + rotated.y(),
+                                      planeZAt(rotated.x(), rotated.y()) + config.maxStepHeight});
     }
 
-    Eigen::Quaterniond orientation(rotation_matrix);
+    hull.heightOffset = planeNormal * config.robotHeight;
+
+    std::vector<Eigen::Vector3d> corners;
+    corners.reserve(8);
+    for (const Eigen::Vector3d& c : hull.bottomCorners)
+        corners.push_back(c);
+    for (const Eigen::Vector3d& c : hull.bottomCorners)
+        corners.push_back(c + hull.heightOffset);
+
+    hull.poly = generatePolyhedron(corners);
+    return hull;
+}
+
 #ifdef ENABLE_DEBUG_DRAWINGS
-    /*
+void TraversabilityGenerator3d::drawCollisionDebug(const std::string& tag, int counter,
+    const BodyHull& body, const SurfacePatch<MLSConfig::SLOPE>* p, const Eigen::Vector3d& pos)
+{
+    const std::string robotPrefix = "colliding_robot_" + tag + std::to_string(counter);
+    const Eigen::Vector4d red{1.0, 0.0, 0.0, 1.0};
+
     V3DD::COMPLEX_DRAWING([&]
     {
-        V3DD::DRAW_WIREFRAME_BOX("traversability_generator3d_mls_patch_box", position, orientation, size, colorRGBA);
+        for (size_t i = 0; i < 4; i++)
+        {
+            Eigen::Vector3d lo = body.bottomCorners[i];
+            Eigen::Vector3d hi = body.bottomCorners[i] + body.heightOffset;
+            size_t next = (i + 1) % 4;
+            Eigen::Vector3d loNext = body.bottomCorners[next];
+            Eigen::Vector3d hiNext = body.bottomCorners[next] + body.heightOffset;
+
+            V3DD::DRAW_LINE(robotPrefix + "_v" + std::to_string(i), lo, hi, red);
+            V3DD::DRAW_LINE(robotPrefix + "_lo" + std::to_string(i), lo, loNext, red);
+            V3DD::DRAW_LINE(robotPrefix + "_hi" + std::to_string(i), hi, hiNext, red);
+        }
     });
-    */
-#endif
+
+    // Colliding MLS patch: sloped prism when the outline is available, cell box otherwise.
+    std::vector<Eigen::Vector3f> polygonPoints;
+    Eigen::Vector2f cellCenter = pos.head<2>().cast<float>();
+    Eigen::Vector2f cellSize(config.gridResolution, config.gridResolution);
+    maps::grid::getPolygon(polygonPoints, *p, cellCenter, cellSize);
+
+    const std::string patchPrefix = "colliding_patch_" + tag + std::to_string(counter);
+    const Eigen::Vector4d yellow{1.0, 0.8, 0.0, 1.0};
+
+    if (polygonPoints.size() >= 3)
+    {
+        Eigen::Vector3f normalf = p->getNormal();
+        if (normalf.z() < 0)
+            normalf *= -1.0f;
+        Eigen::Vector3d normal{normalf.x(), normalf.y(), normalf.z()};
+        if (normal.norm() > 1e-6)
+            normal.normalize();
+        else
+            normal = Eigen::Vector3d::UnitZ();
+        const double thickness = 0.02;
+
+        V3DD::COMPLEX_DRAWING([&]
+        {
+            for (size_t i = 0; i < polygonPoints.size(); i++)
+            {
+                Eigen::Vector3d hi = polygonPoints[i].cast<double>();
+                Eigen::Vector3d lo = hi - thickness * normal;
+                size_t next = (i + 1) % polygonPoints.size();
+                Eigen::Vector3d hiNext = polygonPoints[next].cast<double>();
+                Eigen::Vector3d loNext = hiNext - thickness * normal;
+
+                V3DD::DRAW_LINE(patchPrefix + "_v" + std::to_string(i), lo, hi, yellow);
+                V3DD::DRAW_LINE(patchPrefix + "_lo" + std::to_string(i), lo, loNext, yellow);
+                V3DD::DRAW_LINE(patchPrefix + "_hi" + std::to_string(i), hi, hiNext, yellow);
+            }
+        });
+    }
+    else
+    {
+        float minZ, maxZ;
+        p->getRange(minZ, maxZ);
+        double hres = config.gridResolution / 2.0;
+        std::vector<Eigen::Vector3d> corners = {
+            {pos.x() + hres, pos.y() + hres, (double)minZ},
+            {pos.x() + hres, pos.y() - hres, (double)minZ},
+            {pos.x() - hres, pos.y() - hres, (double)minZ},
+            {pos.x() - hres, pos.y() + hres, (double)minZ}
+        };
+        double height = maxZ - minZ;
+
+        V3DD::COMPLEX_DRAWING([&]
+        {
+            for (size_t i = 0; i < 4; i++)
+            {
+                Eigen::Vector3d lo = corners[i];
+                Eigen::Vector3d hi = corners[i] + Eigen::Vector3d(0, 0, height);
+                size_t next = (i + 1) % 4;
+                Eigen::Vector3d loNext = corners[next];
+                Eigen::Vector3d hiNext = corners[next] + Eigen::Vector3d(0, 0, height);
+
+                V3DD::DRAW_LINE(patchPrefix + "_v" + std::to_string(i), lo, hi, yellow);
+                V3DD::DRAW_LINE(patchPrefix + "_lo" + std::to_string(i), lo, loNext, yellow);
+                V3DD::DRAW_LINE(patchPrefix + "_hi" + std::to_string(i), hi, hiNext, yellow);
+            }
+        });
+    }
 }
+#endif
 
 bool TraversabilityGenerator3d::checkStepHeightAABB(TravGenNode *node)
 {
-
-    /** What this method does:
-     * Check if any of the patches around @p node that the robot might stand on is higher than stepHeight.
-     * I.e. if any of the patches is so high that it would be inside the robots body.
-     */
+    /** Check if any of the patches around @p node that the robot might stand on is
+     *  higher than stepHeight, i.e. would be inside the robot's body. */
 
     Eigen::Vector3d nodePos;
     if (!trMap.fromGrid(node->getIndex(), nodePos)) {
@@ -702,78 +667,28 @@ bool TraversabilityGenerator3d::checkStepHeightAABB(TravGenNode *node)
     // obstacle are already obstacle-free by construction; the remaining gap to the
     // rotation-safe circle is covered by inflateObstacles.
     const double halfSmall = footprintMinHalfExtent(config);
-    Eigen::Vector3d min(-halfSmall, -halfSmall, config.maxStepHeight);
-    Eigen::Vector3d max( halfSmall,  halfSmall, config.maxStepHeight + config.robotHeight);
+    const Eigen::AlignedBox3d limitBox(
+        nodePos + Eigen::Vector3d(-halfSmall, -halfSmall, config.maxStepHeight),
+        nodePos + Eigen::Vector3d( halfSmall,  halfSmall, config.maxStepHeight + config.robotHeight));
 
-    min += nodePos;
-    max += nodePos;
+    const Eigen::Hyperplane<double, 3>& plane(node->getUserData().plane);
 
-    const Eigen::AlignedBox3d limitBox(min, max);
-    View area = mlsGrid->intersectCuboid(limitBox);
-
-    const Eigen::Hyperplane<double, 3> &plane(node->getUserData().plane);
-
-    Index minIdx;
-    Index maxIdx;
-
-
-    if(!mlsGrid->toGrid(limitBox.min(), minIdx))
-    {
-        //when the robot bounding box leaves the map this patch cannot be traversable
-        return false;
-    }
-    if(!mlsGrid->toGrid(limitBox.max(), maxIdx))
-    {
-        //when the robot bounding box leaves the map this patch cannot be traversable
-        return false;
-    }
-
-    Index curIndex = minIdx;
-    Index areaSize(maxIdx-minIdx);
-
-    //the robot size has been set to a value smaller than one cell. Thus we cannot check anything.
-    if(area.getNumCells().y() <= 0 || area.getNumCells().x() <= 0)
-        return true;
-
-    //Iterate ALL cells of the view: the old "-1" bounds (justified by intersectCuboid's
-    //inclusive max) silently skipped the last row/column of patches inside the footprint.
-    //For a collision check the conservative direction is inclusion -- an extra boundary
-    //cell only costs one more test.
-    for(size_t y = 0; y < area.getNumCells().y(); y++, curIndex.y() += 1)
-    {
-        curIndex.x() = minIdx.x();
-        for(size_t x = 0; x < area.getNumCells().x(); x++, curIndex.x() += 1)
+    const PatchWalk walk = forEachPatchInBox(*mlsGrid, limitBox,
+        [&](const SurfacePatch<MLSConfig::SLOPE>* p, Eigen::Vector3d pos)
         {
-            Eigen::Vector3d pos;
-            // Convert grid index directly to world coordinates
-            if (!mlsGrid->fromGrid(curIndex, pos)) {
-                LOG_ERROR_S << "TraversabilityGenerator3d: fromGrid failed for grid index "
-                            << curIndex << " — index outside MLS grid bounds.";
-                continue;
-            }
+            pos.z() = (p->getTop() + p->getBottom()) / 2.;
+            //bounding box already checks height of robot
+            return plane.absDistance(pos) <= config.maxStepHeight;
+        });
 
-            for(const SurfacePatch<MLSConfig::SLOPE> *p : area.at(x, y))
-            {
-                pos.z() = (p->getTop()+p->getBottom())/2.;
-                float dist = plane.absDistance(pos);
-                //bounding box already checks height of robot
-                if(dist > config.maxStepHeight)
-                {
-                    return false;
-                }
-            }
-        }
-    }
-
-    return true;
+    // OutsideGrid: when the robot bounding box leaves the map this patch cannot be
+    // traversable. Aborted: a patch intrudes into the body volume.
+    return walk == PatchWalk::Completed;
 }
 
 bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
 {
-    /** What this method does:
-     * Check if any of the patches within the robot OBB
-     * @p node come into collison with the robot.
-     */
+    /** Check if any of the patches within the robot OBB collide with the robot. */
 
     Eigen::Vector3d nodePos;
     if (!trMap.fromGrid(node->getIndex(), nodePos)) {
@@ -784,253 +699,49 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
     }
     nodePos.z() += node->getHeight();
 
-    // Reference surface: the node's fitted ground plane (see checkCollisionForYaw for the
-    // rationale -- sampling "terrain" under the corners could hoist the modelled body onto
-    // the very obstacle it should collide with).
-    Eigen::Vector3d planeNormal = node->getUserData().plane.normal();
-    if (!planeNormal.allFinite() || planeNormal.norm() < 1e-6 || std::abs(planeNormal.z()) < 1e-6)
-        planeNormal = Eigen::Vector3d::UnitZ();
-    else
-    {
-        planeNormal.normalize();
-        if (planeNormal.z() < 0.0)
-            planeNormal = -planeNormal;
-    }
-    //ground plane z at an xy offset from the node centre (the plane passes through nodePos)
-    auto planeZAt = [&](double dx, double dy)
-    {
-        return nodePos.z() - (planeNormal.x() * dx + planeNormal.y() * dy) / planeNormal.z();
-    };
-
-    const double coffX = config.footprintOffsetX;
-    const double chx = config.robotSizeX / 2.0;
-    const double chy = config.robotSizeY / 2.0;
-    std::vector<Eigen::Vector3d> bottomCorners = {
-        {nodePos.x() + coffX + chx, nodePos.y() + chy, planeZAt(coffX + chx,  chy) + config.maxStepHeight},
-        {nodePos.x() + coffX + chx, nodePos.y() - chy, planeZAt(coffX + chx, -chy) + config.maxStepHeight},
-        {nodePos.x() + coffX - chx, nodePos.y() - chy, planeZAt(coffX - chx, -chy) + config.maxStepHeight},
-        {nodePos.x() + coffX - chx, nodePos.y() + chy, planeZAt(coffX - chx,  chy) + config.maxStepHeight},
-    };
-
-    const Eigen::Vector3d heightOffset = planeNormal * config.robotHeight;
-
-    // Lower 4 corners + Upper 4 corners (at lower + height offset)
-    std::vector<Eigen::Vector3d> robotEdges4Point;
-    for(const auto& corner : bottomCorners)
-    {
-        robotEdges4Point.push_back(corner);
-    }
-    for(size_t i = 0; i < 4; i++)
-    {
-        robotEdges4Point.push_back(bottomCorners[i] + heightOffset);
-    }
-    
-    // Build polyhedron from these 8 corners
-    Polyhedron_3 robot = generatePolyhedron(robotEdges4Point);
+    const BodyHull body = buildBodyPolyhedron(nodePos, node->getUserData().plane, 0.0);
 
     // Query MLS patches across the entire unrotated robot footprint bounding box. The z
     // range is widened by the plane's possible drop/rise across the footprint so patches
     // under the downhill corners are not missed on slopes.
     const double halfX = config.robotSizeX / 2.0;
     const double halfY = config.robotSizeY / 2.0;
+    const double coffX = config.footprintOffsetX;
     const double zSlack = footprintMaxReach(config) * std::tan(config.maxSlope);
-    Eigen::Vector3d min(coffX - halfX, -halfY, config.maxStepHeight - zSlack);
-    Eigen::Vector3d max(coffX + halfX,  halfY, config.maxStepHeight + config.robotHeight + zSlack);
+    const Eigen::AlignedBox3d limitBox(
+        nodePos + Eigen::Vector3d(coffX - halfX, -halfY, config.maxStepHeight - zSlack),
+        nodePos + Eigen::Vector3d(coffX + halfX,  halfY,
+                                  config.maxStepHeight + config.robotHeight + zSlack));
 
-    min += nodePos;
-    max += nodePos;
-
-    const Eigen::AlignedBox3d limitBox(min, max);
-    View area = mlsGrid->intersectCuboid(limitBox);
-
-    Index minIdx;
-    Index maxIdx;
-
-    if(!mlsGrid->toGrid(limitBox.min(), minIdx))
-    {
-        //when the robot bounding box leaves the map this patch cannot be traversable
-        return false;
-    }
-    if(!mlsGrid->toGrid(limitBox.max(), maxIdx))
-    {
-        //when the robot bounding box leaves the map this patch cannot be traversable
-        return false;
-    }
-
-    Index curIndex = minIdx;
-    Index areaSize(maxIdx-minIdx);
-
-    //the robot size has been set to a value smaller than one cell. Thus we cannot check anything.
-    if(area.getNumCells().y() <= 0 || area.getNumCells().x() <= 0)
-        return true;
-
-    //Iterate ALL cells of the view: the old "-1" bounds (justified by intersectCuboid's
-    //inclusive max) silently skipped the last row/column of patches inside the footprint.
-    //For a collision check the conservative direction is inclusion -- an extra boundary
-    //cell only costs one more test.
-    for(size_t y = 0; y < area.getNumCells().y(); y++, curIndex.y() += 1)
-    {
-        curIndex.x() = minIdx.x();
-        for(size_t x = 0; x < area.getNumCells().x(); x++, curIndex.x() += 1)
+    const PatchWalk walk = forEachPatchInBox(*mlsGrid, limitBox,
+        [&](const SurfacePatch<MLSConfig::SLOPE>* p, Eigen::Vector3d pos)
         {
-            Eigen::Vector3d pos;
-            // Convert grid index directly to world coordinates instead of using view-local coords
-            if (!mlsGrid->fromGrid(curIndex, pos)) {
-                LOG_ERROR_S << "TraversabilityGenerator3d: fromGrid failed for grid index " 
-                            << curIndex << " — index outside MLS grid bounds.";
-                continue;
-            }
+            pos.z() = (p->getTop() + p->getBottom()) / 2.0;
 
-            for(const SurfacePatch<MLSConfig::SLOPE> *p : area.at(x, y))
-            {
-                pos.z() = (p->getTop() + p->getBottom()) / 2.0;
+            Polyhedron_3 patch = createPolyhedronFromSurfacePatch(p, pos);
+            if (!CGAL::Polygon_mesh_processing::do_intersect(patch, body.poly))
+                return true;
 
-                Polyhedron_3 patch = createPolyhedronFromSurfacePatch(p,pos);
-                if(CGAL::Polygon_mesh_processing::do_intersect(patch,robot))
-                {
 #ifdef ENABLE_DEBUG_DRAWINGS
-                    // V3DD must NOT run from OpenMP workers: DRAW_* marshals to the
-                    // Qt GUI thread with a BLOCKING invoke, and during expansion the
-                    // GUI thread is parked on this parallel region's barrier — a
-                    // guaranteed deadlock (observed live in the travgen GUI). Draw
-                    // only when the check runs on a serial path.
+            // V3DD must NOT run from OpenMP workers: DRAW_* marshals to the Qt GUI
+            // thread with a BLOCKING invoke while that thread is parked on the
+            // parallel region's barrier.
 #ifdef _OPENMP
-                    if (!omp_in_parallel())
+            if (!omp_in_parallel())
 #endif
-                    {
-                        static int collisionCounter = 0;
-                        collisionCounter++;
-                        if (collisionCounter % 200 == 0)
-                        {
-                            std::string robotPrefix = "colliding_robot_" + std::to_string(collisionCounter);
-                            Eigen::Vector4d red{1.0, 0.0, 0.0, 1.0};
-                            
-                            V3DD::COMPLEX_DRAWING([&]
-                            {
-                                for(size_t i = 0; i < 4; i++)
-                                {
-                                    Eigen::Vector3d lo = bottomCorners[i];
-                                    Eigen::Vector3d hi = bottomCorners[i] + heightOffset;
-                                    size_t next = (i + 1) % 4;
-                                    Eigen::Vector3d loNext = bottomCorners[next];
-                                    Eigen::Vector3d hiNext = bottomCorners[next] + heightOffset;
-                                    
-                                    V3DD::DRAW_LINE(robotPrefix + "_v" + std::to_string(i), lo, hi, red);
-                                    V3DD::DRAW_LINE(robotPrefix + "_lo" + std::to_string(i), lo, loNext, red);
-                                    V3DD::DRAW_LINE(robotPrefix + "_hi" + std::to_string(i), hi, hiNext, red);
-                                }
-                            });
-
-                            // Draw colliding MLS patch sloped prism
-                            std::vector<Eigen::Vector3f> polygonPoints;
-                            Eigen::Vector2f cellCenter = pos.head<2>().cast<float>();
-                            Eigen::Vector2f cellSize(config.gridResolution, config.gridResolution);
-                            maps::grid::getPolygon(polygonPoints, *p, cellCenter, cellSize);
-
-                            if (polygonPoints.size() >= 3)
-                            {
-                                std::string patchPrefix = "colliding_patch_" + std::to_string(collisionCounter);
-                                Eigen::Vector4d yellow{1.0, 0.8, 0.0, 1.0};
-                                Eigen::Vector3f normalf = p->getNormal();
-                                if (normalf.z() < 0)
-                                    normalf *= -1.0f;
-                                Eigen::Vector3d normal{normalf.x(), normalf.y(), normalf.z()};
-                                if (normal.norm() > 1e-6)
-                                    normal.normalize();
-                                else
-                                    normal = Eigen::Vector3d::UnitZ();
-                                const double thickness = 0.02;
-
-                                V3DD::COMPLEX_DRAWING([&]
-                                {
-                                    for (size_t i = 0; i < polygonPoints.size(); i++)
-                                    {
-                                        Eigen::Vector3d hi = polygonPoints[i].cast<double>();
-                                        Eigen::Vector3d lo = hi - thickness * normal;
-                                        size_t next = (i + 1) % polygonPoints.size();
-                                        Eigen::Vector3d hiNext = polygonPoints[next].cast<double>();
-                                        Eigen::Vector3d loNext = hiNext - thickness * normal;
-
-                                        V3DD::DRAW_LINE(patchPrefix + "_v" + std::to_string(i), lo, hi, yellow);
-                                        V3DD::DRAW_LINE(patchPrefix + "_lo" + std::to_string(i), lo, loNext, yellow);
-                                        V3DD::DRAW_LINE(patchPrefix + "_hi" + std::to_string(i), hi, hiNext, yellow);
-                                    }
-                                });
-                            }
-                            else
-                            {
-                                std::string patchPrefix = "colliding_patch_" + std::to_string(collisionCounter);
-                                Eigen::Vector4d yellow{1.0, 0.8, 0.0, 1.0};
-                                float minZ, maxZ;
-                                p->getRange(minZ, maxZ);
-                                double hres = config.gridResolution / 2.0;
-
-                                std::vector<Eigen::Vector3d> corners = {
-                                    {pos.x() + hres, pos.y() + hres, (double)minZ},
-                                    {pos.x() + hres, pos.y() - hres, (double)minZ},
-                                    {pos.x() - hres, pos.y() - hres, (double)minZ},
-                                    {pos.x() - hres, pos.y() + hres, (double)minZ}
-                                };
-                                double height = maxZ - minZ;
-
-                                V3DD::COMPLEX_DRAWING([&]
-                                {
-                                    for (size_t i = 0; i < 4; i++)
-                                    {
-                                        Eigen::Vector3d lo = corners[i];
-                                        Eigen::Vector3d hi = corners[i] + Eigen::Vector3d(0, 0, height);
-                                        size_t next = (i + 1) % 4;
-                                        Eigen::Vector3d loNext = corners[next];
-                                        Eigen::Vector3d hiNext = corners[next] + Eigen::Vector3d(0, 0, height);
-
-                                        V3DD::DRAW_LINE(patchPrefix + "_v" + std::to_string(i), lo, hi, yellow);
-                                        V3DD::DRAW_LINE(patchPrefix + "_lo" + std::to_string(i), lo, loNext, yellow);
-                                        V3DD::DRAW_LINE(patchPrefix + "_hi" + std::to_string(i), hi, hiNext, yellow);
-                                    }
-                                });
-                            }
-                        }
-                    }
-#endif
-                    return false;
-                }
-            }
-        }
-    }
-
-#ifdef ENABLE_DEBUG_DRAWINGS
-    /*
-    {
-        static int boxCounter = 0;
-        if(boxCounter++ % 50 == 0)
-        {
-            V3DD::COMPLEX_DRAWING([&]
             {
-                Eigen::Vector4d darkBrown{0.4, 0.25, 0.1, 1.0};
-                std::string prefix = "exact_obb_" + std::to_string(boxCounter);
-                
-                for(size_t i = 0; i < 4; i++)
-                {
-                    Eigen::Vector3d lo = cornerPositions[i];
-                    Eigen::Vector3d hi = cornerPositions[i] + heightOffset;
-                    size_t next = (i + 1) % 4;
-                    Eigen::Vector3d loNext = cornerPositions[next];
-                    Eigen::Vector3d hiNext = cornerPositions[next] + heightOffset;
-                    
-                    // Vertical edge
-                    V3DD::DRAW_LINE(prefix + "_v" + std::to_string(i), lo, hi, darkBrown);
-                    // Lower perimeter edge
-                    V3DD::DRAW_LINE(prefix + "_lo" + std::to_string(i), lo, loNext, darkBrown);
-                    // Upper perimeter edge
-                    V3DD::DRAW_LINE(prefix + "_hi" + std::to_string(i), hi, hiNext, darkBrown);
-                }
-            });
-        }
-    }
-    */
+                static int collisionCounter = 0;
+                collisionCounter++;
+                if (collisionCounter % 200 == 0)
+                    drawCollisionDebug("", collisionCounter, body, p, pos);
+            }
 #endif
+            return false;
+        });
 
-    return true;
+    // OutsideGrid: when the robot bounding box leaves the map this patch cannot be
+    // traversable. Aborted: collision.
+    return walk == PatchWalk::Completed;
 }
 
 Polyhedron_3 TraversabilityGenerator3d::createPolyhedronFromSurfacePatch(const SurfacePatch<MLSConfig::SLOPE> *p, const Eigen::Vector3d& position){
@@ -1117,63 +828,37 @@ std::vector<TraversabilityGenerator3d::YawCheckPatch> TraversabilityGenerator3d:
         return out;
     nodePos.z() += node->getHeight();
 
-    // Same rotation-safe search window as the per-yaw checks (covers all yaws).
-    const double halfDiag = footprintMaxReach(config);
-    const double zSlack = halfDiag * std::tan(config.maxSlope);
-    Eigen::Vector3d searchMin(-halfDiag, -halfDiag, config.maxStepHeight - zSlack);
-    Eigen::Vector3d searchMax( halfDiag,  halfDiag, config.maxStepHeight + config.robotHeight + zSlack);
-    searchMin += nodePos;
-    searchMax += nodePos;
-    const Eigen::AlignedBox3d limitBox(searchMin, searchMax);
-    View area = mlsGrid->intersectCuboid(limitBox);
-
-    Index minIdx, maxIdx;
-    if (!mlsGrid->toGrid(limitBox.min(), minIdx) || !mlsGrid->toGrid(limitBox.max(), maxIdx))
-        return out;  // boundary case: checkCollisionForYaw() re-checks and returns unsafe
-
-    if (area.getNumCells().y() <= 0 || area.getNumCells().x() <= 0)
-        return out;
-
-    Index curIndex = minIdx;
-    for (size_t y = 0; y < area.getNumCells().y(); y++, curIndex.y() += 1)
-    {
-        curIndex.x() = minIdx.x();
-        for (size_t x = 0; x < area.getNumCells().x(); x++, curIndex.x() += 1)
+    // Boundary case (window outside the map): checkCollisionForYaw() re-checks the
+    // same box and returns unsafe, so an empty collection is correct here.
+    forEachPatchInBox(*mlsGrid, rotationSafeSearchBox(nodePos),
+        [&](const SurfacePatch<MLSConfig::SLOPE>* p, Eigen::Vector3d pos)
         {
-            Eigen::Vector3d pos;
-            if (!mlsGrid->fromGrid(curIndex, pos))
-                continue;
+            pos.z() = (p->getTop() + p->getBottom()) / 2.0;
 
-            for (const SurfacePatch<MLSConfig::SLOPE>* p : area.at(x, y))
-            {
-                pos.z() = (p->getTop() + p->getBottom()) / 2.0;
-
-                YawCheckPatch cp;
-                cp.poly = createPolyhedronFromSurfacePatch(p, pos);
-                cp.cellXY = pos.head<2>();
-                cp.patch = p;
-                cp.pos = pos;
-                // Top of the ACTUAL polyhedron (its z can exceed the raw patch
-                // range through the padded plane reconstruction). An empty
-                // polyhedron cannot collide; -inf makes the z prefilter drop it.
-                double zMax = -std::numeric_limits<double>::infinity();
-                for (auto it = cp.poly.points_begin(); it != cp.poly.points_end(); ++it)
-                    zMax = std::max(zMax, CGAL::to_double(it->z()));
-                cp.zMax = zMax;
-                out.push_back(std::move(cp));
-            }
-        }
-    }
+            YawCheckPatch cp;
+            cp.poly = createPolyhedronFromSurfacePatch(p, pos);
+            cp.cellXY = pos.head<2>();
+            cp.patch = p;
+            cp.pos = pos;
+            // Top of the ACTUAL polyhedron (its z can exceed the raw patch range
+            // through the padded plane reconstruction). An empty polyhedron cannot
+            // collide; -inf makes the z prefilter drop it.
+            double zMax = -std::numeric_limits<double>::infinity();
+            for (auto it = cp.poly.points_begin(); it != cp.poly.points_end(); ++it)
+                zMax = std::max(zMax, CGAL::to_double(it->z()));
+            cp.zMax = zMax;
+            out.push_back(std::move(cp));
+            return true;
+        });
     return out;
 }
 
 bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double yaw,
                                                      const std::vector<YawCheckPatch>& patches)
 {
-    /** Check if the robot, rotated to a specific yaw angle, would collide
-     *  with MLS patches at the given node position.
-     *  @return true if the yaw is collision-free (safe).
-     */
+    /** Check if the robot, rotated to a specific yaw angle, would collide with MLS
+     *  patches at the given node position (patches pre-collected per node).
+     *  @return true if the yaw is collision-free (safe). */
 
     Eigen::Vector3d nodePos;
     if (!trMap.fromGrid(node->getIndex(), nodePos)) {
@@ -1181,75 +866,14 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
     }
     nodePos.z() += node->getHeight();
 
-    const double hx = config.robotSizeX / 2.0;
-    const double hy = config.robotSizeY / 2.0;
-
-    // Reference surface: the node's fitted ground plane. The previous implementation
-    // sampled "terrain" height under each corner, which happily picked obstacle patches
-    // (their normals are often near-vertical) and hoisted/tilted the modelled body onto
-    // the very obstacle it should collide with, reporting the yaw as safe. The fitted
-    // plane comes from the ground fit (walls and thick patches are excluded there), so
-    // obstacles cannot drag the body upwards.
-    Eigen::Vector3d planeNormal = node->getUserData().plane.normal();
-    if (!planeNormal.allFinite() || planeNormal.norm() < 1e-6 || std::abs(planeNormal.z()) < 1e-6)
-        planeNormal = Eigen::Vector3d::UnitZ();
-    else
-    {
-        planeNormal.normalize();
-        if (planeNormal.z() < 0.0)
-            planeNormal = -planeNormal;
-    }
-    //ground plane z at an xy offset from the node centre (the plane passes through nodePos)
-    auto planeZAt = [&](double dx, double dy)
-    {
-        return nodePos.z() - (planeNormal.x() * dx + planeNormal.y() * dy) / planeNormal.z();
-    };
-
-    // Build yaw rotation
-    Eigen::AngleAxisd yawRotation(yaw, Eigen::Vector3d::UnitZ());
-
-    // 4 lower corners of the robot OBB (offset along the body x axis), rotated by yaw,
-    // resting on the ground plane with maxStepHeight clearance
-    const double offX = config.footprintOffsetX;
-    std::vector<Eigen::Vector3d> localCorners = {
-        {offX + hx,  hy, 0.0},
-        {offX + hx, -hy, 0.0},
-        {offX - hx, -hy, 0.0},
-        {offX - hx,  hy, 0.0},
-    };
-
-    std::vector<Eigen::Vector3d> bottomCorners;
-    for (const auto& lc : localCorners)
-    {
-        const Eigen::Vector3d rotated = yawRotation * lc;
-        bottomCorners.push_back({nodePos.x() + rotated.x(),
-                                 nodePos.y() + rotated.y(),
-                                 planeZAt(rotated.x(), rotated.y()) + config.maxStepHeight});
-    }
-
-    const Eigen::Vector3d heightOffset = planeNormal * config.robotHeight;
-
-    // Add upper 4 corners
-    std::vector<Eigen::Vector3d> robotEdges8;
-    for (const auto& c : bottomCorners)
-        robotEdges8.push_back(c);
-    for (const auto& c : bottomCorners)
-        robotEdges8.push_back(c + heightOffset);
-
-    Polyhedron_3 robot = generatePolyhedron(robotEdges8);
-
-    // Same boundary semantics as before the patch cache: a rotation-safe window
-    // that leaves the map means the cell cannot be traversable at any yaw.
-    const double halfDiag = footprintMaxReach(config);
-    const double zSlack = halfDiag * std::tan(config.maxSlope);
-    Eigen::Vector3d searchMin(-halfDiag, -halfDiag, config.maxStepHeight - zSlack);
-    Eigen::Vector3d searchMax( halfDiag,  halfDiag, config.maxStepHeight + config.robotHeight + zSlack);
-    searchMin += nodePos;
-    searchMax += nodePos;
-    const Eigen::AlignedBox3d limitBox(searchMin, searchMax);
+    // Same boundary semantics as the original per-yaw MLS query: a rotation-safe
+    // window that leaves the map means the cell cannot be traversable at any yaw.
+    const Eigen::AlignedBox3d limitBox = rotationSafeSearchBox(nodePos);
     Index minIdx, maxIdx;
     if (!mlsGrid->toGrid(limitBox.min(), minIdx) || !mlsGrid->toGrid(limitBox.max(), maxIdx))
         return false;
+
+    const BodyHull body = buildBodyPolyhedron(nodePos, node->getUserData().plane, yaw);
 
     // Conservative prefilters applied per cached patch BEFORE any exact CGAL
     // test. XY: the patch cell (padded by its half-diagonal plus the tilt-induced
@@ -1257,12 +881,21 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
     // Z: a patch entirely below the tilted body-bottom plane (ground under the
     // belly -- the vast majority of the window) cannot collide.
     const double cellHalfDiag = mlsGrid->getResolution().x() * M_SQRT1_2;
-    const double tiltReach = config.robotHeight * planeNormal.head<2>().norm();
+    const double tiltReach = config.robotHeight * body.planeNormal.head<2>().norm();
     const double xyMargin = cellHalfDiag + tiltReach + 1e-6;
     const double gradSlack = cellHalfDiag *
-        planeNormal.head<2>().norm() / std::max(1e-6, planeNormal.z());
+        body.planeNormal.head<2>().norm() / std::max(1e-6, body.planeNormal.z());
     const double cosYaw = std::cos(yaw);
     const double sinYaw = std::sin(yaw);
+    const double bodyOffX = config.footprintOffsetX;
+    const double bodyHx = config.robotSizeX / 2.0;
+    const double bodyHy = config.robotSizeY / 2.0;
+    //ground plane z at an xy offset from the node centre (the plane passes through nodePos)
+    auto planeZAt = [&](double dx, double dy)
+    {
+        return nodePos.z() - (body.planeNormal.x() * dx + body.planeNormal.y() * dy)
+               / body.planeNormal.z();
+    };
 
     for (const YawCheckPatch& cp : patches)
     {
@@ -1270,133 +903,35 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
         const double dy = cp.cellXY.y() - nodePos.y();
         const double localX =  cosYaw * dx + sinYaw * dy;
         const double localY = -sinYaw * dx + cosYaw * dy;
-        if (localX < offX - hx - xyMargin || localX > offX + hx + xyMargin ||
-            std::abs(localY) > hy + xyMargin)
+        if (localX < bodyOffX - bodyHx - xyMargin || localX > bodyOffX + bodyHx + xyMargin ||
+            std::abs(localY) > bodyHy + xyMargin)
             continue;
 
         const double bodyBottomZ = planeZAt(dx, dy) + config.maxStepHeight;
         if (cp.zMax < bodyBottomZ - gradSlack - 1e-6)
             continue;
 
-        if (CGAL::Polygon_mesh_processing::do_intersect(cp.poly, robot))
+        if (CGAL::Polygon_mesh_processing::do_intersect(cp.poly, body.poly))
         {
-                // Aliases keep the debug-drawing block below identical to the
-                // pre-cache implementation.
-                const SurfacePatch<MLSConfig::SLOPE>* p = cp.patch;
-                Eigen::Vector3d pos = cp.pos;
-                (void)p;
-                (void)pos;
-                {
 #ifdef ENABLE_DEBUG_DRAWINGS
-                    // V3DD must NOT run from OpenMP workers: DRAW_* marshals to the
-                    // Qt GUI thread with a BLOCKING invoke, and during expansion the
-                    // GUI thread is parked on this parallel region's barrier — a
-                    // guaranteed deadlock (observed live in the travgen GUI). Draw
-                    // only when the check runs on a serial path.
+            // V3DD must NOT run from OpenMP workers: DRAW_* marshals to the Qt GUI
+            // thread with a BLOCKING invoke while that thread is parked on the
+            // parallel region's barrier.
 #ifdef _OPENMP
-                    if (!omp_in_parallel())
+            if (!omp_in_parallel())
 #endif
-                    {
-                        static int yawCollisionCounter = 0;
-                        yawCollisionCounter++;
-                        if (yawCollisionCounter % 200 == 0)
-                        {
-                            std::string robotPrefix = "colliding_robot_yaw_" + std::to_string(yawCollisionCounter);
-                            Eigen::Vector4d red{1.0, 0.0, 0.0, 1.0};
-                            
-                            V3DD::COMPLEX_DRAWING([&]
-                            {
-                                for(size_t i = 0; i < 4; i++)
-                                {
-                                    Eigen::Vector3d lo = bottomCorners[i];
-                                    Eigen::Vector3d hi = bottomCorners[i] + heightOffset;
-                                    size_t next = (i + 1) % 4;
-                                    Eigen::Vector3d loNext = bottomCorners[next];
-                                    Eigen::Vector3d hiNext = bottomCorners[next] + heightOffset;
-                                    
-                                    V3DD::DRAW_LINE(robotPrefix + "_v" + std::to_string(i), lo, hi, red);
-                                    V3DD::DRAW_LINE(robotPrefix + "_lo" + std::to_string(i), lo, loNext, red);
-                                    V3DD::DRAW_LINE(robotPrefix + "_hi" + std::to_string(i), hi, hiNext, red);
-                                }
-                            });
-
-                            // Draw colliding MLS patch sloped prism
-                            std::vector<Eigen::Vector3f> polygonPoints;
-                            Eigen::Vector2f cellCenter = pos.head<2>().cast<float>();
-                            Eigen::Vector2f cellSize(config.gridResolution, config.gridResolution);
-                            maps::grid::getPolygon(polygonPoints, *p, cellCenter, cellSize);
-
-                            if (polygonPoints.size() >= 3)
-                            {
-                                std::string patchPrefix = "colliding_patch_yaw_" + std::to_string(yawCollisionCounter);
-                                Eigen::Vector4d yellow{1.0, 0.8, 0.0, 1.0};
-                                Eigen::Vector3f normalf = p->getNormal();
-                                if (normalf.z() < 0)
-                                    normalf *= -1.0f;
-                                Eigen::Vector3d normal{normalf.x(), normalf.y(), normalf.z()};
-                                if (normal.norm() > 1e-6)
-                                    normal.normalize();
-                                else
-                                    normal = Eigen::Vector3d::UnitZ();
-                                const double thickness = 0.02;
-
-                                V3DD::COMPLEX_DRAWING([&]
-                                {
-                                    for (size_t i = 0; i < polygonPoints.size(); i++)
-                                    {
-                                        Eigen::Vector3d hi = polygonPoints[i].cast<double>();
-                                        Eigen::Vector3d lo = hi - thickness * normal;
-                                        size_t next = (i + 1) % polygonPoints.size();
-                                        Eigen::Vector3d hiNext = polygonPoints[next].cast<double>();
-                                        Eigen::Vector3d loNext = hiNext - thickness * normal;
-
-                                        V3DD::DRAW_LINE(patchPrefix + "_v" + std::to_string(i), lo, hi, yellow);
-                                        V3DD::DRAW_LINE(patchPrefix + "_lo" + std::to_string(i), lo, loNext, yellow);
-                                        V3DD::DRAW_LINE(patchPrefix + "_hi" + std::to_string(i), hi, hiNext, yellow);
-                                    }
-                                });
-                            }
-                            else
-                            {
-                                std::string patchPrefix = "colliding_patch_yaw_" + std::to_string(yawCollisionCounter);
-                                Eigen::Vector4d yellow{1.0, 0.8, 0.0, 1.0};
-                                float minZ, maxZ;
-                                p->getRange(minZ, maxZ);
-                                double hres = config.gridResolution / 2.0;
-
-                                std::vector<Eigen::Vector3d> corners = {
-                                    {pos.x() + hres, pos.y() + hres, (double)minZ},
-                                    {pos.x() + hres, pos.y() - hres, (double)minZ},
-                                    {pos.x() - hres, pos.y() - hres, (double)minZ},
-                                    {pos.x() - hres, pos.y() + hres, (double)minZ}
-                                };
-                                double height = maxZ - minZ;
-
-                                V3DD::COMPLEX_DRAWING([&]
-                                {
-                                    for (size_t i = 0; i < 4; i++)
-                                    {
-                                        Eigen::Vector3d lo = corners[i];
-                                        Eigen::Vector3d hi = corners[i] + Eigen::Vector3d(0, 0, height);
-                                        size_t next = (i + 1) % 4;
-                                        Eigen::Vector3d loNext = corners[next];
-                                        Eigen::Vector3d hiNext = corners[next] + Eigen::Vector3d(0, 0, height);
-
-                                        V3DD::DRAW_LINE(patchPrefix + "_v" + std::to_string(i), lo, hi, yellow);
-                                        V3DD::DRAW_LINE(patchPrefix + "_lo" + std::to_string(i), lo, loNext, yellow);
-                                        V3DD::DRAW_LINE(patchPrefix + "_hi" + std::to_string(i), hi, hiNext, yellow);
-                                    }
-                                });
-                            }
-                        }
-                    }
+            {
+                static int yawCollisionCounter = 0;
+                yawCollisionCounter++;
+                if (yawCollisionCounter % 200 == 0)
+                    drawCollisionDebug("yaw_", yawCollisionCounter, body, cp.patch, cp.pos);
+            }
 #endif
-                    return false; // collision found — this yaw is not safe
-                }
+            return false; // collision found -- this yaw is not safe
         }
     }
 
-    return true; // no collision — yaw is safe
+    return true; // no collision -- yaw is safe
 }
 
 bool TraversabilityGenerator3d::computeSafeOrientations(TravGenNode* node)
@@ -1445,8 +980,7 @@ void TraversabilityGenerator3d::inflateFrontiers()
 
     for(TravGenNode *n : frontierNodesGrowList)
     {
-        // fillEnclosedUnknownRegions() may have retyped a former frontier to TRAVERSABLE
-        // (its pocket got filled) -- such nodes must not seed frontier inflation anymore.
+        // Defensive: skip seeds whose type changed since they were collected.
         if(n->getType() != TraversabilityNodeBase::FRONTIER)
             continue;
 
@@ -1476,139 +1010,6 @@ void TraversabilityGenerator3d::inflateFrontiers()
     frontierNodesGrowList.clear();
 }
 
-void TraversabilityGenerator3d::fillEnclosedUnknownRegions()
-{
-    // Unmeasured cells are typed OBSTACLE at creation (tracked in unmeasuredNodesList).
-    // Interior occlusion pockets (scan shadows, holes in the point cloud) that are fully
-    // enclosed by mapped terrain are re-expanded here with the local-evidence gate
-    // bypassed, i.e. interpolated from the surrounding measured ground -- still passing
-    // the normal slope and step checks. Unmeasured cells at the outer map edge, and
-    // pockets wider than the plane fit's search radius, remain OBSTACLE: unmeasured
-    // space is not traversable.
-    const Vector2ui numCells = trMap.getNumCells();
-    if(numCells.x() == 0 || numCells.y() == 0)
-        return;
-    const int sizeX = static_cast<int>(numCells.x());
-    const int sizeY = static_cast<int>(numCells.y());
-
-    // 2D mask: does a cell contain any node (on any level)?
-    std::vector<uint8_t> hasNode(static_cast<size_t>(sizeX) * sizeY, 0);
-    for(int y = 0; y < sizeY; y++)
-        for(int x = 0; x < sizeX; x++)
-            if(!trMap.at(x, y).empty())
-                hasNode[static_cast<size_t>(y) * sizeX + x] = 1;
-
-    // Flood-fill from the grid border over node-less cells: exterior emptiness.
-    std::vector<uint8_t> exteriorEmpty(static_cast<size_t>(sizeX) * sizeY, 0);
-    std::deque<std::pair<int, int>> flood;
-    auto pushEmpty = [&](int x, int y)
-    {
-        if(x < 0 || y < 0 || x >= sizeX || y >= sizeY)
-            return;
-        const size_t i = static_cast<size_t>(y) * sizeX + x;
-        if(hasNode[i] || exteriorEmpty[i])
-            return;
-        exteriorEmpty[i] = 1;
-        flood.emplace_back(x, y);
-    };
-    for(int x = 0; x < sizeX; x++) { pushEmpty(x, 0); pushEmpty(x, sizeY - 1); }
-    for(int y = 0; y < sizeY; y++) { pushEmpty(0, y); pushEmpty(sizeX - 1, y); }
-    while(!flood.empty())
-    {
-        const std::pair<int, int> c = flood.front();
-        flood.pop_front();
-        pushEmpty(c.first + 1, c.second);
-        pushEmpty(c.first - 1, c.second);
-        pushEmpty(c.first, c.second + 1);
-        pushEmpty(c.first, c.second - 1);
-    }
-
-    // An unmeasured node is a genuine edge node iff it sits on the grid border or is
-    // 8-adjacent to exterior emptiness. Everything else rims an interior pocket.
-    std::deque<TravGenNode*> pocketNodes;
-    for(TravGenNode* n : unmeasuredNodesList)
-    {
-        if(n->getUserData().nodeType != NodeType::OBSTACLE)
-            continue;  // already refilled in an earlier pass
-        const int x = n->getIndex().x();
-        const int y = n->getIndex().y();
-        bool edge = (x == 0 || y == 0 || x == sizeX - 1 || y == sizeY - 1);
-        for(int dy = -1; dy <= 1 && !edge; dy++)
-        {
-            for(int dx = -1; dx <= 1 && !edge; dx++)
-            {
-                const int nx = x + dx;
-                const int ny = y + dy;
-                if(nx < 0 || ny < 0 || nx >= sizeX || ny >= sizeY)
-                    continue;
-                if(exteriorEmpty[static_cast<size_t>(ny) * sizeX + nx])
-                    edge = true;
-            }
-        }
-        if(!edge)
-            pocketNodes.push_back(n);
-    }
-    // Entries are consumed by this pass: edge nodes simply stay OBSTACLE, refit failures
-    // below re-register themselves for the next pass via createTraversabilityPatchAt.
-    unmeasuredNodesList.clear();
-
-    if(pocketNodes.empty())
-        return;
-
-    LOG_INFO_S << "TraversabilityGenerator3d: re-expanding " << pocketNodes.size()
-               << " interior unmeasured nodes (enclosed pockets)";
-
-    // Re-fit the pocket rim with the evidence gate bypassed, then re-run the expansion
-    // loop so the flood fills the pocket interior. The re-expansion cannot escape the
-    // pocket: every node surrounding it is already expanded.
-    std::deque<TravGenNode*> candidates;
-    // Refit the pocket rim in parallel: computePlaneRansac only reads the MLS and
-    // writes the node's own data. Queue bookkeeping stays serial below.
-    const std::vector<TravGenNode*> pocketVec(pocketNodes.begin(), pocketNodes.end());
-    std::vector<uint8_t> fitOkVec(pocketVec.size(), 0);
-    const std::int64_t numPocket = static_cast<std::int64_t>(pocketVec.size());
-    #pragma omp parallel for schedule(dynamic) if(numPocket >= kMinParallelItems)
-    for(std::int64_t i = 0; i < numPocket; i++)
-    {
-        TravGenNode* node = pocketVec[i];
-        const float oldHeight = node->getHeight();
-        node->setType(TraversabilityNodeBase::UNSET);
-        node->getUserData().nodeType = NodeType::UNSET;
-        const bool fitOk = computePlaneRansac(*node);
-        // Keep the creation-time (interpolated) height: the node already sits in its
-        // height-ordered level list, so it must not move vertically after insertion.
-        node->setHeight(oldHeight);
-        fitOkVec[i] = fitOk ? 1 : 0;
-    }
-    for(std::int64_t i = 0; i < numPocket; i++)
-    {
-        TravGenNode* node = pocketVec[i];
-        if(!fitOkVec[i])
-        {
-            node->setType(TraversabilityNodeBase::OBSTACLE);
-            node->getUserData().nodeType = NodeType::OBSTACLE;
-            continue;
-        }
-        node->setNotExpanded();
-        candidates.push_back(node);
-    }
-
-    while(!candidates.empty())
-    {
-        TravGenNode* node = candidates.front();
-        candidates.pop_front();
-        if(node->isExpanded())
-            continue;
-        if(!expandNode(node))
-            continue;
-        for(auto* n : node->getConnections())
-        {
-            if(!n->isExpanded())
-                candidates.push_back(static_cast<TravGenNode*>(n));
-        }
-    }
-}
-
 void TraversabilityGenerator3d::setConfig(const TraversabilityConfig &config)
 {
     warnOnDegenerateFootprint(config);
@@ -1625,41 +1026,6 @@ void TraversabilityGenerator3d::setConfig(const TraversabilityConfig &config)
         soilMap.extend(Vector2ui(newSize.x(), newSize.y()));
         soilMap.getLocalFrame() = mlsGrid->getLocalFrame();
     }
-
-    const double offX = config.footprintOffsetX;
-    double robotHalfLength = config.robotSizeX / 2.0;
-    double robotHalfWidth = config.robotSizeY / 2.0;
-    double robotHalfHeight = config.robotHeight / 2.0;
-
-    robotEdges = {
-        {offX + robotHalfLength, robotHalfWidth, robotHalfHeight},    // Top-right-front
-        {offX + robotHalfLength, robotHalfWidth, -robotHalfHeight},   // Top-right-back
-        {offX + robotHalfLength, -robotHalfWidth, robotHalfHeight},   // Bottom-right-front
-        {offX + robotHalfLength, -robotHalfWidth, -robotHalfHeight},  // Bottom-right-back
-        {offX - robotHalfLength, robotHalfWidth, robotHalfHeight},    // Top-left-front
-        {offX - robotHalfLength, robotHalfWidth, -robotHalfHeight},   // Top-left-back
-        {offX - robotHalfLength, -robotHalfWidth, robotHalfHeight},   // Bottom-left-front
-        {offX - robotHalfLength, -robotHalfWidth, -robotHalfHeight}   // Bottom-left-back
-    };
-
-    robotPolyhedron = generatePolyhedron(robotEdges);
-
-    double patchHalfLength = config.gridResolution / 2.0;
-    double patchHalfWidth = config.gridResolution / 2.0;
-    double patchHalfHeight = patchHeight / 2.0;
-
-    patchEdges = {
-        {patchHalfLength, patchHalfWidth, patchHalfHeight},    // Top-right-front
-        {patchHalfLength, patchHalfWidth, -patchHalfHeight},   // Top-right-back
-        {patchHalfLength, -patchHalfWidth, patchHalfHeight},   // Bottom-right-front
-        {patchHalfLength, -patchHalfWidth, -patchHalfHeight},  // Bottom-right-back
-        {-patchHalfLength, patchHalfWidth, patchHalfHeight},   // Top-left-front
-        {-patchHalfLength, patchHalfWidth, -patchHalfHeight},  // Top-left-back
-        {-patchHalfLength, -patchHalfWidth, patchHalfHeight},  // Bottom-left-front
-        {-patchHalfLength, -patchHalfWidth, -patchHalfHeight}  // Bottom-left-back
-    };
-
-    patchPolyhedron = generatePolyhedron(patchEdges);
 }
 
 void TraversabilityGenerator3d::expandAll(const Eigen::Vector3d& startPos)
@@ -1822,48 +1188,16 @@ void TraversabilityGenerator3d::expandAll(TravGenNode* startNode, const double e
         {
             TravGenNode* node = wave[i];
 
-            if(config.useSoilInformation)
-            {
-                const Eigen::Vector3d nodePos = node->getPosition(trMap);
-                generateStartSoilNode(nodePos);
-            }
-
-            node->setExpanded();
-
             cnd++;
             if((cnd % 1000) == 0)
             {
                 LOG_DEBUG_S << "TraversabilityGenerator3d: Expanded " << cnd << " traversability nodes.";
             }
 
-            switch(static_cast<NodeClassification>(outcome[i]))
-            {
-                case NodeClassification::Unknown:
-                    continue;
-                case NodeClassification::PreexistingObstacle:
-                    obstacleNodesGrowList.push_back(node);
-                    continue;
-                case NodeClassification::Obstacle:
-                    node->setType(TraversabilityNodeBase::OBSTACLE);
-                    node->getUserData().nodeType = NodeType::OBSTACLE;
-                    obstacleNodesGrowList.push_back(node);
-                    continue;
-                case NodeClassification::Traversable:
-                    break;
-            }
-
-            addConnectedPatches(node, &prefits);
-
-            if(checkForFrontier(node))
-            {
-                node->setType(TraversabilityNodeBase::FRONTIER);
-                node->getUserData().nodeType = NodeType::FRONTIER;
-                frontierNodesGrowList.push_back(node);
+            // finalizeNode() is the shared mutation half of expandNode(); here it
+            // consumes the pre-computed classification and the wave's pre-fit cache.
+            if(!finalizeNode(node, static_cast<NodeClassification>(outcome[i]), &prefits))
                 continue;
-            }
-
-            node->setType(TraversabilityNodeBase::TRAVERSABLE);
-            node->getUserData().nodeType = NodeType::TRAVERSABLE;
 
             for(auto* n : node->getConnections())
             {
@@ -1900,8 +1234,6 @@ void TraversabilityGenerator3d::expandAll(TravGenNode* startNode, const double e
                << tFinalize << " s.";
 
     const auto tBfs = std::chrono::steady_clock::now();
-    fillEnclosedUnknownRegions();
-    const auto tPockets = std::chrono::steady_clock::now();
     inflateFrontiers();
     const auto tFrontiers = std::chrono::steady_clock::now();
     inflateObstacles();
@@ -1913,8 +1245,7 @@ void TraversabilityGenerator3d::expandAll(TravGenNode* startNode, const double e
     LOG_INFO_S << "TraversabilityGenerator3d: expanded " << cnd << " nodes ("
                << currentNodeId << " total in map) in "
                << sec(expandStart, tObstacles) << " s (bfs " << sec(expandStart, tBfs)
-               << ", pockets " << sec(tBfs, tPockets)
-               << ", frontiers " << sec(tPockets, tFrontiers)
+               << ", frontiers " << sec(tBfs, tFrontiers)
                << ", obstacle inflation " << sec(tFrontiers, tObstacles) << ").";
 
 #ifdef ENABLE_DEBUG_DRAWINGS
@@ -2009,8 +1340,7 @@ void TraversabilityGenerator3d::inflateObstacles()
 
     for (TravGenNode *n : obstacleNodesGrowList)
     {
-        // fillEnclosedUnknownRegions() may have refilled a former unmeasured obstacle to
-        // TRAVERSABLE -- such nodes must not seed obstacle inflation anymore.
+        // Defensive: skip seeds whose type changed since they were collected.
         if(n->getType() != TraversabilityNodeBase::OBSTACLE)
             continue;
 
@@ -2162,7 +1492,6 @@ void TraversabilityGenerator3d::setMLSGrid(std::shared_ptr< traversability_gener
 
 void TraversabilityGenerator3d::clearTrMap()
 {
-    unmeasuredNodesList.clear();
     for(LevelList<TravGenNode *> &l : trMap)
     {
         for(TravGenNode *n : l)
@@ -2249,6 +1578,12 @@ SoilNode* TraversabilityGenerator3d::generateStartSoilNode(const Eigen::Vector3d
 
 bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
 {
+    return finalizeNode(node, classifyNode(node), nullptr);
+}
+
+bool TraversabilityGenerator3d::finalizeNode(TravGenNode* node, NodeClassification classification,
+                                             PrefitCache* prefits)
+{
     // Populate the soil map alongside expansion only when soil information is actually used.
     // Otherwise this allocates and inserts a SoilNode for every expanded cell into a map that
     // nothing consumes (the soil pipeline in the GUI is itself gated on useSoilInformation).
@@ -2260,7 +1595,7 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
 
     node->setExpanded();
 
-    switch(classifyNode(node))
+    switch(classification)
     {
         case NodeClassification::Unknown:
             return false;
@@ -2277,7 +1612,7 @@ bool TraversabilityGenerator3d::expandNode(TravGenNode * node)
     }
 
     //add surrounding
-    addConnectedPatches(node);
+    addConnectedPatches(node, prefits);
 
     if(checkForFrontier(node))
     {
@@ -2329,36 +1664,6 @@ TraversabilityGenerator3d::NodeClassification TraversabilityGenerator3d::classif
     return NodeClassification::Traversable;
 }
 
-bool TraversabilityGenerator3d::isNodeFreeOfObstacles(const traversability_generator3d::TravGenNode* node) const
-{
-    //check if there is an mls patch above the ground
-    Eigen::Vector3d nodePos;
-    if (!trMap.fromGrid(node->getIndex(), nodePos, node->getHeight())) {
-        throw std::runtime_error(
-            "TraversabilityGenerator3d: Node index ("+ std::to_string(node->getIndex().x()) + ", " + std::to_string(node->getIndex().y()) + ")"
-            + " with height " + std::to_string(node->getHeight())
-            + " is outside of the traversability grid."
-        );
-    }
-
-    Eigen::Vector3d min(-config.gridResolution/2.0 + 1e-5, -config.gridResolution / 2.0 + 1e-5, config.maxStepHeight);
-    Eigen::Vector3d max(config.gridResolution/2.0 - 1e-5, config.gridResolution/2.0 - 1e-5, config.maxStepHeight + config.robotHeight);
-    
-    
-    min += nodePos;
-    max += nodePos;
-    
-    const Eigen::AlignedBox3d boundingBox(min, max);
-    
-    size_t numIntersections = 0;
-    const View area = mlsGrid->intersectCuboid(boundingBox, numIntersections);
-    if(numIntersections > 0)
-        return false;
-    
-    return true;
-}
-
-
 TraversabilityGenerator3d::PrefitPatch TraversabilityGenerator3d::buildPatchNodeAt(const maps::grid::Index& idx, const double curHeight)
 {
     PrefitPatch result;
@@ -2408,12 +1713,10 @@ TraversabilityGenerator3d::PrefitPatch TraversabilityGenerator3d::buildPatchNode
         const bool planeOk = computePlaneRansac(*ret);
         if(!planeOk)
         {
-            // Unmeasured / unfittable cells become obstacles immediately -- there is no
-            // UNKNOWN state anymore. checkForFrontier() therefore never sees UNKNOWN
-            // neighbours, so no FRONTIER / INFLATED_FRONTIER rings form around unmeasured
-            // space. The nodes are remembered in unmeasuredNodesList so that
-            // fillEnclosedUnknownRegions() can still refill interior pockets (by type
-            // alone they are indistinguishable from real obstacles).
+            // Unmeasured / unfittable cells become obstacles immediately and STAY
+            // obstacles -- there is no UNKNOWN state, and (by design decision) no
+            // pocket refilling: the MLS is taken as-is, unseen ground is never
+            // interpolated into traversable terrain.
             ret->setType(TraversabilityNodeBase::OBSTACLE);
             ret->getUserData().nodeType = NodeType::OBSTACLE;
         }
@@ -2421,7 +1724,6 @@ TraversabilityGenerator3d::PrefitPatch TraversabilityGenerator3d::buildPatchNode
         if((ret->getHeight() - config.maxStepHeight) <= curHeight && (ret->getHeight() + config.maxStepHeight) >= curHeight)
         {
             result.node = ret;
-            result.unmeasured = !planeOk;
             return result;
         }
         else
@@ -2437,7 +1739,6 @@ TraversabilityGenerator3d::PrefitPatch TraversabilityGenerator3d::buildPatchNode
     ret->setType(TraversabilityNodeBase::OBSTACLE);
     ret->getUserData().nodeType = NodeType::OBSTACLE;
     result.node = ret;
-    result.unmeasured = false;
     return result;
 }
 
@@ -2447,8 +1748,6 @@ TravGenNode* TraversabilityGenerator3d::finishPatchNode(const PrefitPatch& prefi
         return nullptr;
     prefit.node->getUserData().id = currentNodeId++;
     trMap.at(idx).insert(prefit.node);
-    if(prefit.unmeasured)
-        unmeasuredNodesList.push_back(prefit.node);
     return prefit.node;
 }
 

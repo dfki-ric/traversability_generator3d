@@ -13,7 +13,6 @@ rock_library(traversability_generator3d
             SoilNode.hpp
             SoilSample.hpp
             TraversabilityConfig.hpp
-            TravMapBfsVisitor.hpp         
     DEPS_PKGCONFIG 
         base-types 
         maps

@@ -24,8 +24,8 @@ namespace
 
 /** Terrain with everything the expansion has to handle: flat ground, a tall
  *  obstacle block (obstacle typing + inflation + yaw sampling), a small step
- *  (step-height checks) and an unmeasured hole (unmeasured->OBSTACLE + pocket
- *  refill). */
+ *  (step-height checks) and an unmeasured hole (unmeasured cells stay
+ *  OBSTACLE — no pocket refilling by design). */
 MLSMapSloped buildTestMls()
 {
     const Vector2d res(0.3, 0.3);
