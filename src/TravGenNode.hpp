@@ -2,6 +2,7 @@
 #include <base/Eigen.hpp>
 #include <maps/grid/TraversabilityMap3d.hpp>
 #include <boost/serialization/serialization.hpp>
+#include <boost/serialization/version.hpp>
 #include <base/Angle.hpp>
 #include <cstdint>
 
@@ -89,7 +90,10 @@ struct TravGenTrackingData
         ar & id;
         ar & allowedOrientations;
         ar & nodeType;
-        ar & obstacleCause;
+        // obstacleCause was appended in class version 1; archives written
+        // before that must not try to read it.
+        if (version >= 1)
+            ar & obstacleCause;
         ar & cost;
     }
 };
@@ -129,3 +133,5 @@ typedef maps::grid::TraversabilityNode<TravGenTrackingData> TravGenNode;
 typedef maps::grid::TraversabilityMap3d<TravGenNode *> TravMap3d;
 
 }
+
+BOOST_CLASS_VERSION(traversability_generator3d::TravGenTrackingData, 1)

@@ -568,6 +568,13 @@ TraversabilityGenerator3d::BodyHull TraversabilityGenerator3d::buildBodyPolyhedr
 void TraversabilityGenerator3d::drawCollisionDebug(const std::string& tag, int counter,
     const BodyHull& body, const SurfacePatch<MLSConfig::SLOPE>* p, const Eigen::Vector3d& pos)
 {
+    // V3DD THROWS when no dispatcher was configured — the case in every
+    // HEADLESS process (ROS node, CLI tools) built with ENABLE_DEBUG_DRAWINGS.
+    // An escaped throw here terminates the process (observed: SIGABRT during
+    // parking-deck expansion). Debug drawing is best-effort: swallow and skip.
+    try
+    {
+
     const std::string robotPrefix = "colliding_robot_" + tag + std::to_string(counter);
     const Eigen::Vector4d red{1.0, 0.0, 0.0, 1.0};
 
@@ -652,6 +659,16 @@ void TraversabilityGenerator3d::drawCollisionDebug(const std::string& tag, int c
                 V3DD::DRAW_LINE(patchPrefix + "_hi" + std::to_string(i), hi, hiNext, yellow);
             }
         });
+    }
+    }
+    catch (const std::exception& ex)
+    {
+        static bool warned = false;
+        if (!warned)
+        {
+            warned = true;
+            LOG_WARN_S << "Debug drawing disabled: " << ex.what();
+        }
     }
 }
 #endif
@@ -1192,6 +1209,20 @@ void TraversabilityGenerator3d::expandAll(TravGenNode* startNode, const double e
         // create. emplace() keeps the FIRST request per cell = wave order, which
         // matches the serial creation order.
         PrefitCache prefits;
+        // RAII: pre-fitted nodes that nobody consumed were never part of the map
+        // and must be freed even if a later phase throws.
+        struct PrefitSweeper
+        {
+            PrefitCache& cache;
+            ~PrefitSweeper()
+            {
+                for (auto& kv : cache)
+                {
+                    delete kv.second.patch.node;
+                    kv.second.patch.node = nullptr;
+                }
+            }
+        } prefitSweeper{prefits};
         for(std::int64_t i = 0; i < waveSize; i++)
         {
             if(static_cast<NodeClassification>(outcome[i]) != NodeClassification::Traversable)
@@ -1248,7 +1279,9 @@ void TraversabilityGenerator3d::expandAll(TravGenNode* startNode, const double e
 
             for(auto* n : node->getConnections())
             {
-                if(n->isExpanded())
+                // checkForFrontier() treats null connections as reachable state
+                // (externally edited/deserialized maps); tolerate them here too.
+                if(!n || n->isExpanded())
                     continue;
                 if(expandDist > 0)
                 {
@@ -1260,17 +1293,7 @@ void TraversabilityGenerator3d::expandAll(TravGenNode* startNode, const double e
             }
         }
 
-        // Pre-fitted nodes nobody consumed (their request was satisfied by a
-        // wave-mate's insertion instead) were never part of the map: free them.
-        for(auto& kv : prefits)
-        {
-            if(kv.second.patch.node)
-            {
-                delete kv.second.patch.node;
-                kv.second.patch.node = nullptr;
-            }
-        }
-
+        // Unconsumed pre-fitted nodes are freed by prefitSweeper (RAII).
         wave.swap(nextWave);
         tFinalize += std::chrono::duration<double>(Clock::now() - tPhase).count();
     }

@@ -74,15 +74,19 @@ T clampE(T value, T min, T max) {
 void TravMap3dVisualization::visualizeNode(const TravGenNode* node)
 {
 
-    Eigen::Vector2f curNodePos = (node->getIndex().cast<float>() + Eigen::Vector2f(0.5, 0.5)).array() * map.getResolution().cast<float>().array();
-
-    PatchesGeode *geode = dynamic_cast<PatchesGeode *>(nodeGeode.get());
-    geode->setPosition(curNodePos.x(), curNodePos.y());
-
     if (!node) {
-        LOG_ERROR_S << "Failed due to null node!";
+        LOG_ERROR_S << "TravMap3dVisualization: null node!";
         return;
     }
+
+    PatchesGeode *geode = dynamic_cast<PatchesGeode *>(nodeGeode.get());
+    if (!geode) {
+        LOG_ERROR_S << "TravMap3dVisualization: nodeGeode is not a PatchesGeode!";
+        return;
+    }
+
+    Eigen::Vector2f curNodePos = (node->getIndex().cast<float>() + Eigen::Vector2f(0.5, 0.5)).array() * map.getResolution().cast<float>().array();
+    geode->setPosition(curNodePos.x(), curNodePos.y());
 
     const TravGenTrackingData& nodeData = node->getUserData();
     osg::Vec4d color;
@@ -172,7 +176,13 @@ void TravMap3dVisualization::visualizeNode(const TravGenNode* node)
     }
     
     if(std::isnan(node->getHeight()))
-        throw std::runtime_error("FOOOOOOOO");
+    {
+        // Throwing here unwinds through the OSG/Qt render path and aborts the
+        // whole GUI; a corrupt node is a data problem, not a fatal one.
+        LOG_ERROR_S << "TravMap3dVisualization: Ignoring node with NaN height at index "
+                    << node->getIndex().transpose();
+        return;
+    }
     
     geode->drawHorizontalPlane(node->getHeight());
 
