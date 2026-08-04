@@ -3,6 +3,7 @@
 #include <maps/grid/TraversabilityMap3d.hpp>
 #include <boost/serialization/serialization.hpp>
 #include <base/Angle.hpp>
+#include <cstdint>
 
 namespace boost::serialization{
     template<class Archive>
@@ -29,6 +30,19 @@ enum NodeType
     PARTIALLY_TRAVERSABLE
 };
 
+/** WHY a node became OBSTACLE — for debugging/visualization (the planner only
+ *  reads the node type). Set wherever a node is typed OBSTACLE. */
+enum class ObstacleCause : uint8_t
+{
+    NONE = 0,        ///< node is not an obstacle
+    UNMEASURED,      ///< ground-plane fit failed (no/too sparse data)
+    STEEP_SLOPE,     ///< fitted slope > maxSlope
+    STEP_HEIGHT,     ///< patch collides with the robot body volume
+    INCLINE_LIMIT,   ///< no allowed heading under incline limitting
+    NO_SAFE_YAW,     ///< obstacle inflation found no collision-free yaw
+    MAP_BOUNDARY     ///< robot body volume leaves the mapped grid
+};
+
 /**Node struct for TraversabilityMap3d */
 struct TravGenTrackingData
 {
@@ -36,25 +50,28 @@ struct TravGenTrackingData
     Eigen::Hyperplane<double, 3> plane;
     
     /** slope of the plane */
-    double slope;
+    double slope = 0.0;
     
     /** normalized direction of the slope. Only valid if slope > 0 */
-    Eigen::Vector3d slopeDirection;
+    Eigen::Vector3d slopeDirection = Eigen::Vector3d::Zero();
     
     /** The atan2(slopeDirection.y(), slopeDirection.x()), i.e. angle of slopeDirection projected on the xy plane.
      * Precomputed for performance reasons */
-    double slopeDirectionAtan2; 
+    double slopeDirectionAtan2 = 0.0; 
     
     /** continuous unique id  that can be used as index for additional metadata */
-    size_t id; 
+    size_t id = 0; 
 
     /**Some orientations might be forbidden on this patch (e.g. due to slope). This vector
      * contains all orientations that are allowed */
     std::vector<base::AngleSegment> allowedOrientations;
     
-    NodeType nodeType;
+    NodeType nodeType = NodeType::UNSET;
 
-    int cost;
+    /** Why this node is OBSTACLE (NONE otherwise); debugging/visualization only. */
+    ObstacleCause obstacleCause = ObstacleCause::NONE;
+
+    int cost = 0;
 
     /** Serializes the members of this class*/
     template<class Archive>
@@ -72,6 +89,7 @@ struct TravGenTrackingData
         ar & id;
         ar & allowedOrientations;
         ar & nodeType;
+        ar & obstacleCause;
         ar & cost;
     }
 };

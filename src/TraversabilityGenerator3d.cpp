@@ -51,6 +51,16 @@ double footprintMinHalfExtent(const TraversabilityConfig& config)
  *  so treat it as a configuration error. */
 void warnOnDegenerateFootprint(const TraversabilityConfig& config)
 {
+    // Catch broken configs here instead of failing mysteriously downstream
+    // (divisions by gridResolution, empty CGAL body hulls, zero-area fits).
+    if (config.gridResolution <= 0.0)
+        LOG_ERROR_S << "TraversabilityGenerator3d: gridResolution ("
+                    << config.gridResolution << ") must be > 0.";
+    if (config.robotSizeX <= 0.0 || config.robotSizeY <= 0.0 || config.robotHeight <= 0.0)
+        LOG_ERROR_S << "TraversabilityGenerator3d: robot dimensions must be > 0 "
+                    << "(robotSizeX " << config.robotSizeX << ", robotSizeY "
+                    << config.robotSizeY << ", robotHeight " << config.robotHeight << ").";
+
     if (std::abs(config.footprintOffsetX) >= config.robotSizeX / 2.0)
     {
         LOG_WARN_S << "TraversabilityGenerator3d: footprintOffsetX ("
@@ -700,6 +710,13 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
     nodePos.z() += node->getHeight();
 
     const BodyHull body = buildBodyPolyhedron(nodePos, node->getUserData().plane, 0.0);
+    // A degenerate body hull (broken config / non-finite corners) must not reach
+    // CGAL's do_intersect; treat the cell as not traversable, conservatively.
+    if (body.poly.empty())
+    {
+        node->getUserData().obstacleCause = ObstacleCause::STEP_HEIGHT;
+        return false;
+    }
 
     // Query MLS patches across the entire unrotated robot footprint bounding box. The z
     // range is widened by the plane's possible drop/rise across the footprint so patches
@@ -719,6 +736,10 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
             pos.z() = (p->getTop() + p->getBottom()) / 2.0;
 
             Polyhedron_3 patch = createPolyhedronFromSurfacePatch(p, pos);
+            // Fully degenerate patch (no finite geometry): nothing to collide with,
+            // and an empty mesh must not reach do_intersect.
+            if (patch.empty())
+                return true;
             if (!CGAL::Polygon_mesh_processing::do_intersect(patch, body.poly))
                 return true;
 
@@ -740,7 +761,11 @@ bool TraversabilityGenerator3d::checkStepHeightOBB(TravGenNode *node)
         });
 
     // OutsideGrid: when the robot bounding box leaves the map this patch cannot be
-    // traversable. Aborted: collision.
+    // traversable. Aborted: collision. Record WHY for debugging/visualization.
+    if (walk == PatchWalk::OutsideGrid)
+        node->getUserData().obstacleCause = ObstacleCause::MAP_BOUNDARY;
+    else if (walk == PatchWalk::Aborted)
+        node->getUserData().obstacleCause = ObstacleCause::STEP_HEIGHT;
     return walk == PatchWalk::Completed;
 }
 
@@ -874,6 +899,10 @@ bool TraversabilityGenerator3d::checkCollisionForYaw(TravGenNode* node, double y
         return false;
 
     const BodyHull body = buildBodyPolyhedron(nodePos, node->getUserData().plane, yaw);
+    // A degenerate body hull (broken config / non-finite corners) must not reach
+    // CGAL's do_intersect; treat the yaw as unsafe, conservatively.
+    if (body.poly.empty())
+        return false;
 
     // Conservative prefilters applied per cached patch BEFORE any exact CGAL
     // test. XY: the patch cell (padded by its half-diagonal plus the tilt-induced
@@ -945,6 +974,24 @@ bool TraversabilityGenerator3d::computeSafeOrientations(TravGenNode* node)
     // angular resolution (step = 360deg / numYawSamples; 12 -> 30deg).
     const int numSamples = std::max(1, config.numYawSamples);
     const double step = 2.0 * M_PI / numSamples;
+
+    // The rotation-safe window is yaw-independent: if it leaves the allocated
+    // grid, no yaw can be VERIFIED — that is a MAP_BOUNDARY obstacle, not a
+    // "no collision-free yaw" one (no collision was ever tested). Checked once
+    // here instead of failing silently on all numYawSamples yaws.
+    {
+        Eigen::Vector3d nodePos;
+        if (!trMap.fromGrid(node->getIndex(), nodePos))
+            return false;
+        nodePos.z() += node->getHeight();
+        const Eigen::AlignedBox3d limitBox = rotationSafeSearchBox(nodePos);
+        Index minIdx, maxIdx;
+        if (!mlsGrid->toGrid(limitBox.min(), minIdx) || !mlsGrid->toGrid(limitBox.max(), maxIdx))
+        {
+            node->getUserData().obstacleCause = ObstacleCause::MAP_BOUNDARY;
+            return false;
+        }
+    }
 
     // The patch polyhedra are yaw-independent: build them once for this node
     // and reuse them for every sampled yaw.
@@ -1401,6 +1448,7 @@ void TraversabilityGenerator3d::inflateObstacles()
             // Some orientations are safe — partially traversable
             node->setType(TraversabilityNodeBase::TRAVERSABLE);
             node->getUserData().nodeType = NodeType::PARTIALLY_TRAVERSABLE;
+            node->getUserData().obstacleCause = ObstacleCause::NONE;
         }
         else
         {
@@ -1408,6 +1456,10 @@ void TraversabilityGenerator3d::inflateObstacles()
             // any yaw, so it is a plain obstacle (not merely footprint-inflated).
             node->setType(TraversabilityNodeBase::OBSTACLE);
             node->getUserData().nodeType = NodeType::OBSTACLE;
+            // computeSafeOrientations records MAP_BOUNDARY itself when the swept
+            // window left the grid; only genuine all-yaws-collide is NO_SAFE_YAW.
+            if (node->getUserData().obstacleCause == ObstacleCause::NONE)
+                node->getUserData().obstacleCause = ObstacleCause::NO_SAFE_YAW;
         }
     }
 
@@ -1642,6 +1694,7 @@ TraversabilityGenerator3d::NodeClassification TraversabilityGenerator3d::classif
 
     if(node->getUserData().slope > config.maxSlope)
     {
+        node->getUserData().obstacleCause = ObstacleCause::STEEP_SLOPE;
         return NodeClassification::Obstacle;
     }
 
@@ -1657,6 +1710,7 @@ TraversabilityGenerator3d::NodeClassification TraversabilityGenerator3d::classif
     {
         if(!computeAllowedOrientations(node))
         {
+            node->getUserData().obstacleCause = ObstacleCause::INCLINE_LIMIT;
             return NodeClassification::Obstacle;
         }
     }
@@ -1719,6 +1773,7 @@ TraversabilityGenerator3d::PrefitPatch TraversabilityGenerator3d::buildPatchNode
             // interpolated into traversable terrain.
             ret->setType(TraversabilityNodeBase::OBSTACLE);
             ret->getUserData().nodeType = NodeType::OBSTACLE;
+            ret->getUserData().obstacleCause = ObstacleCause::UNMEASURED;
         }
 
         if((ret->getHeight() - config.maxStepHeight) <= curHeight && (ret->getHeight() + config.maxStepHeight) >= curHeight)
@@ -1738,6 +1793,7 @@ TraversabilityGenerator3d::PrefitPatch TraversabilityGenerator3d::buildPatchNode
     ret->setNotExpanded();
     ret->setType(TraversabilityNodeBase::OBSTACLE);
     ret->getUserData().nodeType = NodeType::OBSTACLE;
+    ret->getUserData().obstacleCause = ObstacleCause::UNMEASURED;
     result.node = ret;
     return result;
 }

@@ -38,7 +38,7 @@ using namespace vizkit3d;
 vizkit3d::TravMap3dVisualization::TravMap3dVisualization()
     : MapVisualization< maps::grid::TraversabilityMap3d< traversability_generator3d::TravGenNode* > >()
     , isoline_interval(16.0)
-    , show_connections(false)
+    , show_connections(false), color_obstacles_by_cause(true)
 {
 
 }
@@ -90,6 +90,33 @@ void TravMap3dVisualization::visualizeNode(const TravGenNode* node)
 
     if (nodeData.nodeType == 0) {
         eColor = Eigen::Vector4d(1,0,0,1);
+        if (color_obstacles_by_cause)
+        {
+            // Debug palette: WHY did this cell become an obstacle?
+            switch (nodeData.obstacleCause)
+            {
+                case traversability_generator3d::ObstacleCause::UNMEASURED:
+                    eColor = Eigen::Vector4d(0.35, 0.35, 0.35, 1);   // dark grey
+                    break;
+                case traversability_generator3d::ObstacleCause::STEEP_SLOPE:
+                    eColor = Eigen::Vector4d(1, 0, 0, 1);            // red
+                    break;
+                case traversability_generator3d::ObstacleCause::STEP_HEIGHT:
+                    eColor = Eigen::Vector4d(0.63, 0.13, 0.94, 1);   // purple
+                    break;
+                case traversability_generator3d::ObstacleCause::INCLINE_LIMIT:
+                    eColor = Eigen::Vector4d(1, 0.4, 0.6, 1);        // pink
+                    break;
+                case traversability_generator3d::ObstacleCause::NO_SAFE_YAW:
+                    eColor = Eigen::Vector4d(0.55, 0, 0, 1);         // dark red
+                    break;
+                case traversability_generator3d::ObstacleCause::MAP_BOUNDARY:
+                    eColor = Eigen::Vector4d(0.55, 0.35, 0.15, 1);   // brown
+                    break;
+                default:
+                    break;                                            // plain red
+            }
+        }
     }
 
     else if (nodeData.nodeType == 1) {
@@ -210,6 +237,13 @@ void vizkit3d::TravMap3dVisualization::setIsolineInterval(const double& val)
 bool TravMap3dVisualization::getShowConnections()
 {
     return show_connections;
+}
+
+void TravMap3dVisualization::setColorObstaclesByCause(bool val)
+{
+    color_obstacles_by_cause = val;
+    emit propertyChanged("color_obstacles_by_cause");
+    setDirty();
 }
 
 void TravMap3dVisualization::setShowConnections(bool val)
