@@ -38,7 +38,7 @@ using namespace vizkit3d;
 vizkit3d::TravMap3dVisualization::TravMap3dVisualization()
     : MapVisualization< maps::grid::TraversabilityMap3d< traversability_generator3d::TravGenNode* > >()
     , isoline_interval(16.0)
-    , show_connections(false)
+    , show_connections(false), color_obstacles_by_cause(true)
 {
 
 }
@@ -74,15 +74,19 @@ T clampE(T value, T min, T max) {
 void TravMap3dVisualization::visualizeNode(const TravGenNode* node)
 {
 
-    Eigen::Vector2f curNodePos = (node->getIndex().cast<float>() + Eigen::Vector2f(0.5, 0.5)).array() * map.getResolution().cast<float>().array();
-
-    PatchesGeode *geode = dynamic_cast<PatchesGeode *>(nodeGeode.get());
-    geode->setPosition(curNodePos.x(), curNodePos.y());
-
     if (!node) {
-        LOG_ERROR_S << "Failed due to null node!";
+        LOG_ERROR_S << "TravMap3dVisualization: null node!";
         return;
     }
+
+    PatchesGeode *geode = dynamic_cast<PatchesGeode *>(nodeGeode.get());
+    if (!geode) {
+        LOG_ERROR_S << "TravMap3dVisualization: nodeGeode is not a PatchesGeode!";
+        return;
+    }
+
+    Eigen::Vector2f curNodePos = (node->getIndex().cast<float>() + Eigen::Vector2f(0.5, 0.5)).array() * map.getResolution().cast<float>().array();
+    geode->setPosition(curNodePos.x(), curNodePos.y());
 
     const TravGenTrackingData& nodeData = node->getUserData();
     osg::Vec4d color;
@@ -90,6 +94,33 @@ void TravMap3dVisualization::visualizeNode(const TravGenNode* node)
 
     if (nodeData.nodeType == 0) {
         eColor = Eigen::Vector4d(1,0,0,1);
+        if (color_obstacles_by_cause)
+        {
+            // Debug palette: WHY did this cell become an obstacle?
+            switch (nodeData.obstacleCause)
+            {
+                case traversability_generator3d::ObstacleCause::UNMEASURED:
+                    eColor = Eigen::Vector4d(0.35, 0.35, 0.35, 1);   // dark grey
+                    break;
+                case traversability_generator3d::ObstacleCause::STEEP_SLOPE:
+                    eColor = Eigen::Vector4d(1, 0, 0, 1);            // red
+                    break;
+                case traversability_generator3d::ObstacleCause::STEP_HEIGHT:
+                    eColor = Eigen::Vector4d(0.63, 0.13, 0.94, 1);   // purple
+                    break;
+                case traversability_generator3d::ObstacleCause::INCLINE_LIMIT:
+                    eColor = Eigen::Vector4d(1, 0.4, 0.6, 1);        // pink
+                    break;
+                case traversability_generator3d::ObstacleCause::NO_SAFE_YAW:
+                    eColor = Eigen::Vector4d(0.55, 0, 0, 1);         // dark red
+                    break;
+                case traversability_generator3d::ObstacleCause::MAP_BOUNDARY:
+                    eColor = Eigen::Vector4d(0.55, 0.35, 0.15, 1);   // brown
+                    break;
+                default:
+                    break;                                            // plain red
+            }
+        }
     }
 
     else if (nodeData.nodeType == 1) {
@@ -120,6 +151,11 @@ void TravMap3dVisualization::visualizeNode(const TravGenNode* node)
         eColor = Eigen::Vector4d(1,1,0,1);
     }
 
+    else if (nodeData.nodeType == 8) {
+        // PARTIALLY_TRAVERSABLE: yellow-green to distinguish from full traversable (green)
+        eColor = Eigen::Vector4d(0.6, 0.8, 0.0, 1);
+    }
+
     else {
         eColor = Eigen::Vector4d(0,0,0,1);
     }
@@ -140,7 +176,13 @@ void TravMap3dVisualization::visualizeNode(const TravGenNode* node)
     }
     
     if(std::isnan(node->getHeight()))
-        throw std::runtime_error("FOOOOOOOO");
+    {
+        // Throwing here unwinds through the OSG/Qt render path and aborts the
+        // whole GUI; a corrupt node is a data problem, not a fatal one.
+        LOG_ERROR_S << "TravMap3dVisualization: Ignoring node with NaN height at index "
+                    << node->getIndex().transpose();
+        return;
+    }
     
     geode->drawHorizontalPlane(node->getHeight());
 
@@ -205,6 +247,13 @@ void vizkit3d::TravMap3dVisualization::setIsolineInterval(const double& val)
 bool TravMap3dVisualization::getShowConnections()
 {
     return show_connections;
+}
+
+void TravMap3dVisualization::setColorObstaclesByCause(bool val)
+{
+    color_obstacles_by_cause = val;
+    emit propertyChanged("color_obstacles_by_cause");
+    setDirty();
 }
 
 void TravMap3dVisualization::setShowConnections(bool val)

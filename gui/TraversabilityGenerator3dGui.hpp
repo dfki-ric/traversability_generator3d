@@ -17,12 +17,14 @@
 #include <traversability_generator3d/TraversabilityConfig.hpp>
 #include <traversability_generator3d/TraversabilityGenerator3d.hpp>
 #include <traversability_generator3d/SoilNode.hpp>
+#include <osg/MatrixTransform>
 #endif
 
 class QPushButton;
 class QDoubleSpinBox;
 class QComboBox;
 class QLabel;
+class QCheckBox;
 
 namespace vizkit3d {
     class Vizkit3DWidget;
@@ -44,15 +46,23 @@ public slots:
     void picked(float x, float y,float z, int buttonMask, int modifierMask);
     void expandAll();
     void resetTravMap();
+    void onYawChanged(double deg);
+    void updateConfigFromUI();
 
 private:
     void loadMls(const std::string& path);
     void loadTravConfigFromYaml(const std::string& path);
+    void setupRobotBoxViz();
+    void updateRobotBoxTransform();
     std::vector<traversability_generator3d::SoilSample> soilSamplesList;
     void applySoilInformationToGenerator();
 
 private:
     QPushButton* resetButton;
+    // Height (Z) filter for imported PLY / point clouds, read at load time in loadMls().
+    QCheckBox* heightFilterCheck = nullptr;
+    QDoubleSpinBox* heightFilterMinSpin = nullptr;
+    QDoubleSpinBox* heightFilterMaxSpin = nullptr;
     vizkit3d::Vizkit3DWidget* widget;
     QDoubleSpinBox* time;
     QWidget window;
@@ -74,5 +84,30 @@ private:
     QDoubleSpinBox* sigmaYSpin = nullptr;
     QDoubleSpinBox* uncertaintySpin = nullptr;
     QLabel* soilHintLabel = nullptr;
+
+    QDoubleSpinBox* yawSpin_ = nullptr;
+    osg::ref_ptr<osg::MatrixTransform> robotBoxTransform_;
+
+    QDoubleSpinBox* gridResolutionSpin = nullptr;
+    QDoubleSpinBox* robotHeightSpin = nullptr;
+    QDoubleSpinBox* robotSizeXSpin = nullptr;
+    QDoubleSpinBox* robotSizeYSpin = nullptr;
+    QDoubleSpinBox* distToGroundSpin = nullptr;
+    QDoubleSpinBox* maxSlopeSpin = nullptr;
+    QDoubleSpinBox* maxStepHeightSpin = nullptr;
+    QDoubleSpinBox* inclineLimittingMinSlopeSpin = nullptr;
+    QDoubleSpinBox* inclineLimittingLimitSpin = nullptr;
+    QComboBox* slopeMetricCombo = nullptr;
+    QDoubleSpinBox* costFunctionDistSpin = nullptr;
+    QDoubleSpinBox* minTraversablePercentageSpin = nullptr;
+    QCheckBox* allowForwardDownhillCheck = nullptr;
+    QCheckBox* enableInclineLimittingCheck = nullptr;
+    QCheckBox* useSoilInformationCheck = nullptr;
+    QCheckBox* traverseSandCheck = nullptr;
+    QCheckBox* traverseRocksCheck = nullptr;
+    QCheckBox* traverseGravelCheck = nullptr;
+    QCheckBox* traverseConcreteCheck = nullptr;
+    QCheckBox* articulatedSuspensionCheck = nullptr;
+    QDoubleSpinBox* obstacleInflationMultiplierSpin = nullptr;
 
 };

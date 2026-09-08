@@ -13,7 +13,6 @@ rock_library(traversability_generator3d
             SoilNode.hpp
             SoilSample.hpp
             TraversabilityConfig.hpp
-            TravMapBfsVisitor.hpp         
     DEPS_PKGCONFIG 
         base-types 
         maps
@@ -23,3 +22,13 @@ rock_library(traversability_generator3d
         CGAL::CGAL
         Boost::serialization
 )
+
+# Multi-threaded map expansion / obstacle inflation (wave-parallel OpenMP pragmas
+# in TraversabilityGenerator3d.cpp). Without OpenMP the pragmas are ignored and
+# everything runs single-threaded, exactly as before.
+# NOTE: plain signature — Rock.cmake already links this target with the plain
+# signature, and CMake forbids mixing plain and keyword forms on one target.
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(traversability_generator3d OpenMP::OpenMP_CXX)
+endif()
