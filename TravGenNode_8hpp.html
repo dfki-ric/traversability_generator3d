@@ -55,7 +55,9 @@ $(function() {
 <div class="textblock"><code>#include &lt;base/Eigen.hpp&gt;</code><br />
 <code>#include &lt;maps/grid/TraversabilityMap3d.hpp&gt;</code><br />
 <code>#include &lt;boost/serialization/serialization.hpp&gt;</code><br />
+<code>#include &lt;boost/serialization/version.hpp&gt;</code><br />
 <code>#include &lt;base/Angle.hpp&gt;</code><br />
+<code>#include &lt;cstdint&gt;</code><br />
 </div>
 <p><a href="TravGenNode_8hpp_source.html">Go to the source code of this file.</a></p>
 <table class="memberdecls">
@@ -92,9 +94,23 @@ Enumerations</h2></td></tr>
 , <a class="el" href="namespacetraversability__generator3d.html#aaa5960fc8cb5a176ea27c77bfa2c2b6fadc58bdcf05f6c44c73ccffc6cf77cabc">traversability_generator3d::UNKNOWN</a>
 , <a class="el" href="namespacetraversability__generator3d.html#aaa5960fc8cb5a176ea27c77bfa2c2b6fa8589116c03f3feb38ad1fae5b12b9a51">traversability_generator3d::HOLE</a>
 , <a class="el" href="namespacetraversability__generator3d.html#aaa5960fc8cb5a176ea27c77bfa2c2b6fa2f2ea0440b5402b9b7a89139dad298af">traversability_generator3d::UNSET</a>
+, <br />
+&#160;&#160;<a class="el" href="namespacetraversability__generator3d.html#aaa5960fc8cb5a176ea27c77bfa2c2b6fa3f89b4df644ce73bd7703ca06fae0b68">traversability_generator3d::PARTIALLY_TRAVERSABLE</a>
 <br />
  }</td></tr>
 <tr class="separator:aaa5960fc8cb5a176ea27c77bfa2c2b6f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa7fe524f4b6259ee48946d2396d7ce71" id="r_aa7fe524f4b6259ee48946d2396d7ce71"><td class="memItemLeft" align="right" valign="top">enum class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacetraversability__generator3d.html#aa7fe524f4b6259ee48946d2396d7ce71">traversability_generator3d::ObstacleCause</a> : uint8_t { <br />
+&#160;&#160;<a class="el" href="namespacetraversability__generator3d.html#aa7fe524f4b6259ee48946d2396d7ce71ab50339a10e1de285ac99d4c3990b8693">traversability_generator3d::NONE</a> = 0
+, <a class="el" href="namespacetraversability__generator3d.html#aa7fe524f4b6259ee48946d2396d7ce71ae0a0469cf2b2be423fb925b29ea2b7a0">traversability_generator3d::UNMEASURED</a>
+, <a class="el" href="namespacetraversability__generator3d.html#aa7fe524f4b6259ee48946d2396d7ce71af6bedb375ca531947254be74a89bdbe0">traversability_generator3d::STEEP_SLOPE</a>
+, <a class="el" href="namespacetraversability__generator3d.html#aa7fe524f4b6259ee48946d2396d7ce71a5db0a0c150a21b3f4c85a6d54df12eed">traversability_generator3d::STEP_HEIGHT</a>
+, <br />
+&#160;&#160;<a class="el" href="namespacetraversability__generator3d.html#aa7fe524f4b6259ee48946d2396d7ce71ada6a5bbc872e3b6650bba21ae0859706">traversability_generator3d::INCLINE_LIMIT</a>
+, <a class="el" href="namespacetraversability__generator3d.html#aa7fe524f4b6259ee48946d2396d7ce71ad08918d05e36649af8e4c79e42f2589e">traversability_generator3d::NO_SAFE_YAW</a>
+, <a class="el" href="namespacetraversability__generator3d.html#aa7fe524f4b6259ee48946d2396d7ce71ab42c92245766b28f0af34e301e53d4a6">traversability_generator3d::MAP_BOUNDARY</a>
+<br />
+ }</td></tr>
+<tr class="separator:aa7fe524f4b6259ee48946d2396d7ce71"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>

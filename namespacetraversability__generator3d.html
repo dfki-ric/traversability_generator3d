@@ -61,8 +61,6 @@ Classes</h2></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structtraversability__generator3d_1_1TravGenTrackingData.html">TravGenTrackingData</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classtraversability__generator3d_1_1TravMapBfsVisitor.html">TravMapBfsVisitor</a></td></tr>
-<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="typedef-members" name="typedef-members"></a>
 Typedefs</h2></td></tr>
@@ -103,9 +101,23 @@ Enumerations</h2></td></tr>
 , <a class="el" href="namespacetraversability__generator3d.html#aaa5960fc8cb5a176ea27c77bfa2c2b6fadc58bdcf05f6c44c73ccffc6cf77cabc">UNKNOWN</a>
 , <a class="el" href="namespacetraversability__generator3d.html#aaa5960fc8cb5a176ea27c77bfa2c2b6fa8589116c03f3feb38ad1fae5b12b9a51">HOLE</a>
 , <a class="el" href="namespacetraversability__generator3d.html#aaa5960fc8cb5a176ea27c77bfa2c2b6fa2f2ea0440b5402b9b7a89139dad298af">UNSET</a>
+, <br />
+&#160;&#160;<a class="el" href="namespacetraversability__generator3d.html#aaa5960fc8cb5a176ea27c77bfa2c2b6fa3f89b4df644ce73bd7703ca06fae0b68">PARTIALLY_TRAVERSABLE</a>
 <br />
  }</td></tr>
 <tr class="separator:aaa5960fc8cb5a176ea27c77bfa2c2b6f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa7fe524f4b6259ee48946d2396d7ce71" id="r_aa7fe524f4b6259ee48946d2396d7ce71"><td class="memItemLeft" align="right" valign="top">enum class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacetraversability__generator3d.html#aa7fe524f4b6259ee48946d2396d7ce71">ObstacleCause</a> : uint8_t { <br />
+&#160;&#160;<a class="el" href="namespacetraversability__generator3d.html#aa7fe524f4b6259ee48946d2396d7ce71ab50339a10e1de285ac99d4c3990b8693">NONE</a> = 0
+, <a class="el" href="namespacetraversability__generator3d.html#aa7fe524f4b6259ee48946d2396d7ce71ae0a0469cf2b2be423fb925b29ea2b7a0">UNMEASURED</a>
+, <a class="el" href="namespacetraversability__generator3d.html#aa7fe524f4b6259ee48946d2396d7ce71af6bedb375ca531947254be74a89bdbe0">STEEP_SLOPE</a>
+, <a class="el" href="namespacetraversability__generator3d.html#aa7fe524f4b6259ee48946d2396d7ce71a5db0a0c150a21b3f4c85a6d54df12eed">STEP_HEIGHT</a>
+, <br />
+&#160;&#160;<a class="el" href="namespacetraversability__generator3d.html#aa7fe524f4b6259ee48946d2396d7ce71ada6a5bbc872e3b6650bba21ae0859706">INCLINE_LIMIT</a>
+, <a class="el" href="namespacetraversability__generator3d.html#aa7fe524f4b6259ee48946d2396d7ce71ad08918d05e36649af8e4c79e42f2589e">NO_SAFE_YAW</a>
+, <a class="el" href="namespacetraversability__generator3d.html#aa7fe524f4b6259ee48946d2396d7ce71ab42c92245766b28f0af34e301e53d4a6">MAP_BOUNDARY</a>
+<br />
+ }</td></tr>
+<tr class="separator:aa7fe524f4b6259ee48946d2396d7ce71"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
@@ -202,6 +214,46 @@ Variables</h2></td></tr>
 <tr><td class="fieldname"><a id="aaa5960fc8cb5a176ea27c77bfa2c2b6fadc58bdcf05f6c44c73ccffc6cf77cabc" name="aaa5960fc8cb5a176ea27c77bfa2c2b6fadc58bdcf05f6c44c73ccffc6cf77cabc"></a>UNKNOWN&#160;</td><td class="fielddoc"></td></tr>
 <tr><td class="fieldname"><a id="aaa5960fc8cb5a176ea27c77bfa2c2b6fa8589116c03f3feb38ad1fae5b12b9a51" name="aaa5960fc8cb5a176ea27c77bfa2c2b6fa8589116c03f3feb38ad1fae5b12b9a51"></a>HOLE&#160;</td><td class="fielddoc"></td></tr>
 <tr><td class="fieldname"><a id="aaa5960fc8cb5a176ea27c77bfa2c2b6fa2f2ea0440b5402b9b7a89139dad298af" name="aaa5960fc8cb5a176ea27c77bfa2c2b6fa2f2ea0440b5402b9b7a89139dad298af"></a>UNSET&#160;</td><td class="fielddoc"></td></tr>
+<tr><td class="fieldname"><a id="aaa5960fc8cb5a176ea27c77bfa2c2b6fa3f89b4df644ce73bd7703ca06fae0b68" name="aaa5960fc8cb5a176ea27c77bfa2c2b6fa3f89b4df644ce73bd7703ca06fae0b68"></a>PARTIALLY_TRAVERSABLE&#160;</td><td class="fielddoc"></td></tr>
+</table>
+
+</div>
+</div>
+<a id="aa7fe524f4b6259ee48946d2396d7ce71" name="aa7fe524f4b6259ee48946d2396d7ce71"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa7fe524f4b6259ee48946d2396d7ce71">&#9670;&#160;</a></span>ObstacleCause</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="TraversabilityGenerator3d_8hpp.html#af8597bd99e23c2431d8a5005006291f1">enum</a> <a class="el" href="TraversabilityGenerator3d_8hpp.html#af8597bd99e23c2431d8a5005006291f1">class</a> <a class="el" href="namespacetraversability__generator3d.html#aa7fe524f4b6259ee48946d2396d7ce71">traversability_generator3d::ObstacleCause</a> : <a class="el" href="TraversabilityGenerator3d_8hpp.html#af8597bd99e23c2431d8a5005006291f1">uint8_t</a></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">strong</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>WHY a node became OBSTACLE — for debugging/visualization (the planner only reads the node type). Set wherever a node is typed OBSTACLE. </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="aa7fe524f4b6259ee48946d2396d7ce71ab50339a10e1de285ac99d4c3990b8693" name="aa7fe524f4b6259ee48946d2396d7ce71ab50339a10e1de285ac99d4c3990b8693"></a>NONE&#160;</td><td class="fielddoc"><p>node is not an obstacle </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa7fe524f4b6259ee48946d2396d7ce71ae0a0469cf2b2be423fb925b29ea2b7a0" name="aa7fe524f4b6259ee48946d2396d7ce71ae0a0469cf2b2be423fb925b29ea2b7a0"></a>UNMEASURED&#160;</td><td class="fielddoc"><p>ground-plane fit failed (no/too sparse data) </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa7fe524f4b6259ee48946d2396d7ce71af6bedb375ca531947254be74a89bdbe0" name="aa7fe524f4b6259ee48946d2396d7ce71af6bedb375ca531947254be74a89bdbe0"></a>STEEP_SLOPE&#160;</td><td class="fielddoc"><p>fitted slope &gt; maxSlope </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa7fe524f4b6259ee48946d2396d7ce71a5db0a0c150a21b3f4c85a6d54df12eed" name="aa7fe524f4b6259ee48946d2396d7ce71a5db0a0c150a21b3f4c85a6d54df12eed"></a>STEP_HEIGHT&#160;</td><td class="fielddoc"><p>patch collides with the robot body volume </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa7fe524f4b6259ee48946d2396d7ce71ada6a5bbc872e3b6650bba21ae0859706" name="aa7fe524f4b6259ee48946d2396d7ce71ada6a5bbc872e3b6650bba21ae0859706"></a>INCLINE_LIMIT&#160;</td><td class="fielddoc"><p>no allowed heading under incline limitting </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa7fe524f4b6259ee48946d2396d7ce71ad08918d05e36649af8e4c79e42f2589e" name="aa7fe524f4b6259ee48946d2396d7ce71ad08918d05e36649af8e4c79e42f2589e"></a>NO_SAFE_YAW&#160;</td><td class="fielddoc"><p>obstacle inflation found no collision-free yaw </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa7fe524f4b6259ee48946d2396d7ce71ab42c92245766b28f0af34e301e53d4a6" name="aa7fe524f4b6259ee48946d2396d7ce71ab42c92245766b28f0af34e301e53d4a6"></a>MAP_BOUNDARY&#160;</td><td class="fielddoc"><p>robot body volume leaves the mapped grid </p>
+</td></tr>
 </table>
 
 </div>
