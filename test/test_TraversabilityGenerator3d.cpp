@@ -90,16 +90,20 @@ BOOST_FIXTURE_TEST_CASE(check_travmap, TraversabilityGenerator3dTest){
     startPositions.emplace_back(Eigen::Vector3d(0.0, 0.0, 0.0));
     travGen->expandAll(startPositions);
 
-    Eigen::Vector3d positionUnknown{1.2, 0.0, 0};
-    maps::grid::Index idxUnknown;
-    travGen->getTraversabilityMap().toGrid(positionUnknown, idxUnknown);
-    auto unknown = travGen->findMatchingTraversabilityPatchAt(idxUnknown,0);
-    BOOST_CHECK_EQUAL(unknown->getUserData().nodeType, ::traversability_generator3d::NodeType::UNKNOWN);
+    // Unmeasured/unfittable cells are typed OBSTACLE at creation now; the UNKNOWN
+    // state no longer occurs in the final map (see buildPatchNodeAt).
+    Eigen::Vector3d positionUnmeasured{1.2, 0.0, 0};
+    maps::grid::Index idxUnmeasured;
+    travGen->getTraversabilityMap().toGrid(positionUnmeasured, idxUnmeasured);
+    auto unmeasured = travGen->findMatchingTraversabilityPatchAt(idxUnmeasured,0);
+    BOOST_REQUIRE(unmeasured != nullptr);
+    BOOST_CHECK_EQUAL(unmeasured->getUserData().nodeType, ::traversability_generator3d::NodeType::OBSTACLE);
 
     Eigen::Vector3d positionFrontier{0.9, 0.0, 0};
     maps::grid::Index idxFrontier;
     travGen->getTraversabilityMap().toGrid(positionFrontier, idxFrontier);
     auto frontier = travGen->findMatchingTraversabilityPatchAt(idxFrontier,0);
+    BOOST_REQUIRE(frontier != nullptr);
     // Unmeasured cells are typed OBSTACLE at creation now, so there is no UNKNOWN state
     // and checkForFrontier never fires: FRONTIER cannot appear in the final map.
     BOOST_CHECK(frontier->getUserData().nodeType != ::traversability_generator3d::NodeType::FRONTIER);
@@ -108,26 +112,35 @@ BOOST_FIXTURE_TEST_CASE(check_travmap, TraversabilityGenerator3dTest){
     maps::grid::Index idxInflatedFrontier;
     travGen->getTraversabilityMap().toGrid(positionInflatedFrontier, idxInflatedFrontier);
     auto inflatedFrontier = travGen->findMatchingTraversabilityPatchAt(idxInflatedFrontier,0);
+    BOOST_REQUIRE(inflatedFrontier != nullptr);
     BOOST_CHECK(inflatedFrontier->getUserData().nodeType != ::traversability_generator3d::NodeType::INFLATED_FRONTIER);
 
     Eigen::Vector3d positionObs{0.9, 0.9, 0};
     maps::grid::Index idxObstacleNode;
     travGen->getTraversabilityMap().toGrid(positionObs, idxObstacleNode);
     auto obstacle = travGen->findMatchingTraversabilityPatchAt(idxObstacleNode,0);
+    BOOST_REQUIRE(obstacle != nullptr);
     BOOST_CHECK_EQUAL(obstacle->getUserData().nodeType, ::traversability_generator3d::NodeType::OBSTACLE);
 
     Eigen::Vector3d positionInfObst{0.9, 0.3, 0};
     maps::grid::Index idxInfObstNode;
     travGen->getTraversabilityMap().toGrid(positionInfObst, idxInfObstNode);
-    auto inflatedObstacle = travGen->findMatchingTraversabilityPatchAt(idxInfObstNode,0);
+    // The patch bordering the raised box may sit outside the +-maxStepHeight band around
+    // z=0, so a height-matched lookup can miss it: check the cell's level list directly.
+    const auto& infObstList = travGen->getTraversabilityMap().at(idxInfObstNode);
+    BOOST_REQUIRE(!infObstList.empty());
     // A traversable neighbour of an obstacle with no collision-free yaw is now marked a plain
     // OBSTACLE (previously NodeType::INFLATED_OBSTACLE).
-    BOOST_CHECK_EQUAL(inflatedObstacle->getUserData().nodeType, ::traversability_generator3d::NodeType::OBSTACLE);
+    for(const traversability_generator3d::TravGenNode* inflatedObstacle : infObstList)
+    {
+        BOOST_CHECK_EQUAL(inflatedObstacle->getUserData().nodeType, ::traversability_generator3d::NodeType::OBSTACLE);
+    }
 
     Eigen::Vector3d positionTrav{0.3, 0.3, 0};
     maps::grid::Index idxTraversableNode;
     travGen->getTraversabilityMap().toGrid(positionTrav, idxTraversableNode);
     auto traversable = travGen->findMatchingTraversabilityPatchAt(idxTraversableNode,0);
+    BOOST_REQUIRE(traversable != nullptr);
     BOOST_CHECK_EQUAL(traversable->getUserData().nodeType, ::traversability_generator3d::NodeType::TRAVERSABLE);
 
     // Global invariant since the unmeasured->OBSTACLE change: the final map contains no
