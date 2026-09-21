@@ -27,12 +27,15 @@ public:
         , robotHeight(0.5)
         , robotSizeX(0.5)
         , robotSizeY(0.5)
+        , footprintOffsetX(0.0)
         , distToGround(0)
         , slopeMetricScale(1.0)
         , slopeMetric(NONE)
         , gridResolution(0.3)
         , initialPatchVariance(0.01 * 0.01)
         , obstacleInflationMultiplier(1.0)
+
+        , partiallyTraversableMultiplier(2.0)
         , allowForwardDownhill(true)
         , enableInclineLimitting(false)
         , useSoilInformation(false)
@@ -40,6 +43,9 @@ public:
         , traverseRocks(true)
         , traverseGravel(true)
         , traverseConcrete(true)
+        , articulatedSuspension(true)
+        , numYawSamples(12)
+        , numThreads(0)
     {};
 
     /** The maximum step height that the robot can traverse.
@@ -74,6 +80,13 @@ public:
     double robotSizeX;
     double robotSizeY;
 
+    /** Forward (x) offset of the footprint-box CENTER from the robot origin,
+     *  in the robot frame. 0 keeps the historic behavior (box centered on the
+     *  origin). A robot whose origin is not at its geometric center (e.g. a
+     *  front tool) sets this so the box [offset - sizeX/2, offset + sizeX/2]
+     *  matches the real machine instead of mirroring the larger side. */
+    double footprintOffsetX;
+
     /* Distance from body frame to ground
      * start and goal position are expected in body frame
      */
@@ -97,6 +110,9 @@ public:
      *  Default is 0.5 (half the robot diagonal). Higher values = more conservative inflation. */
     double obstacleInflationMultiplier;
 
+    // Cost multiplier for traversing a partially traversable cell.
+    double partiallyTraversableMultiplier;
+
     /**if true the robot is allowed to drive downhill forward, otherwise
      * it has to drive downhill backwards */
     bool allowForwardDownhill;
@@ -109,5 +125,19 @@ public:
     bool traverseRocks;
     bool traverseGravel;
     bool traverseConcrete;
+    bool articulatedSuspension;
+
+    /** Number of yaw samples tested over the full circle [0,360deg) when computing the allowed
+     *  orientations of a partially traversable cell. This is the exact collision-check count per
+     *  cell, independent of the footprint offset. Higher = finer angular resolution but slower
+     *  map generation. Step = 360deg / numYawSamples (e.g. 12 -> 30deg). */
+    int numYawSamples;
+
+    /** Number of OpenMP threads used by the wave-parallel map expansion (applied at the start
+     *  of expandAll). 0 = do NOT parallelize: the expansion runs single-threaded on the
+     *  calling thread (no OpenMP worker team). N > 0 = use exactly N threads. The map is
+     *  identical for every value by design. ugv_nav4d_ros2 overwrites this with its planner
+     *  numThreads parameter so one knob controls planning AND map generation. */
+    int numThreads;
 };
 }

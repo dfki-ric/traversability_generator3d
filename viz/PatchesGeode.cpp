@@ -189,6 +189,12 @@ namespace vizkit3d
         std::vector< Eigen::Vector3f, Eigen::aligned_allocator<Eigen::Vector3f> > intersections;
         maps::tools::SurfaceIntersection::computeIntersections(plane, box, intersections);
 
+        // A plane that misses or only grazes the cell box yields fewer than 3
+        // intersection points; indexing them below would be UB and the mean
+        // computation would divide by zero. Nothing sensible to draw.
+        if (intersections.size() < 3)
+            return;
+
         // ------ fix the order of vertex in the intersection -------
         // the vertexes in the intersections are not stored in counter clockwise order accroding to the plane normal
         // in default opegl settings the front face is defined as counter-clockwise vertex order

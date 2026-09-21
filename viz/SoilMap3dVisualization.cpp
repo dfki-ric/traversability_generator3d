@@ -109,9 +109,18 @@ Eigen::Vector4d getRockColor(double prob) {
 
 void SoilMap3dVisualization::visualizeNode(const SoilNode* node)
 {
-    Eigen::Vector2f curNodePos = (node->getIndex().cast<float>() + Eigen::Vector2f(0.5, 0.5)).array() * map.getResolution().cast<float>().array();
+    if (!node) {
+        LOG_ERROR_S << "SoilMap3dVisualization: null node!";
+        return;
+    }
 
     PatchesGeode *geode = dynamic_cast<PatchesGeode *>(nodeGeode.get());
+    if (!geode) {
+        LOG_ERROR_S << "SoilMap3dVisualization: nodeGeode is not a PatchesGeode!";
+        return;
+    }
+
+    Eigen::Vector2f curNodePos = (node->getIndex().cast<float>() + Eigen::Vector2f(0.5, 0.5)).array() * map.getResolution().cast<float>().array();
     geode->setPosition(curNodePos.x(), curNodePos.y());
 
     double probSand = node->getUserData().probSand;
@@ -158,7 +167,13 @@ void SoilMap3dVisualization::visualizeNode(const SoilNode* node)
     }
     
     if(std::isnan(node->getHeight()))
-        throw std::runtime_error("FOOOOOOOO");
+    {
+        // Throwing here unwinds through the OSG/Qt render path and aborts the
+        // whole GUI; a corrupt node is a data problem, not a fatal one.
+        LOG_ERROR_S << "SoilMap3dVisualization: Ignoring node with NaN height at index "
+                    << node->getIndex().transpose();
+        return;
+    }
     
     geode->drawHorizontalPlane(node->getHeight());
 }

@@ -49,6 +49,7 @@ class TravMap3dVisualization
     Q_PROPERTY(bool showMapExtents READ areMapExtentsShown WRITE setShowMapExtents)
     Q_PROPERTY(double isoline_interval READ getIsolineInterval WRITE setIsolineInterval)
     Q_PROPERTY(bool show_connections READ getShowConnections WRITE setShowConnections)
+    Q_PROPERTY(bool color_obstacles_by_cause READ getColorObstaclesByCause WRITE setColorObstaclesByCause)
 
 protected:
     virtual void updateDataIntern(const ::maps::grid::TraversabilityMap3d<::traversability_generator3d::TravGenNode *>& data);
@@ -70,6 +71,11 @@ protected:
 
     double isoline_interval;
     bool show_connections;
+    /** Color OBSTACLE cells by WHY they became obstacles (obstacleCause) instead
+     *  of uniform red: dark grey = unmeasured (fit failed), red = steep slope,
+     *  purple = step-height/body collision, pink = incline limit,
+     *  dark red = no safe yaw (inflation), brown = map boundary. */
+    bool color_obstacles_by_cause;
 
 public:
     TravMap3dVisualization();
@@ -86,6 +92,8 @@ public:
     }
 
     double getIsolineInterval() const { return isoline_interval; }
+    bool getColorObstaclesByCause() const { return color_obstacles_by_cause; }
+    void setColorObstaclesByCause(bool val);
     void setIsolineInterval(const double& val);
 
     bool getShowConnections();

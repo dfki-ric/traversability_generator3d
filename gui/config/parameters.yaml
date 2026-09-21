@@ -3,18 +3,19 @@
 travConfig:
 
   # grid
-  gridResolution: 0.3
+  gridResolution: 0.5
   initialPatchVariance: 0.0001
 
   # robot dimensions
-  robotHeight: 0.7
-  robotSizeX: 0.9
-  robotSizeY: 0.6
+  robotHeight: 0.5
+  robotSizeX: 1.0
+  robotSizeY: 1.0
   distToGround: 0.0
+  articulatedSuspension: true  # if false, the robot is modeled with a rigid chassis/axles
 
   # slope / terrain constraints
   maxSlope: 0.45                # [rad]
-  maxStepHeight: 0.25
+  maxStepHeight: 0.45
   inclineLimittingMinSlope: 0.2
   inclineLimittingLimit: 0.1
 
@@ -25,17 +26,29 @@ travConfig:
   # traversability estimation
   costFunctionDist: 0.0
   minTraversablePercentage: 0.4
+  # yaw checks over the full circle for partial-cell allowed orientations
+  # (12 -> 30deg step), independent of the footprint offset
+  numYawSamples: 12
+  # OpenMP threads for the wave-parallel expansion.
+  # 0 = do NOT parallelize (single-threaded); N > 0 = exactly N threads.
+  # In the GUI, leave headroom for the llvmpipe render threads: 8 measured
+  # faster than 16 on a loaded 16-CPU desktop.
+  numThreads: 4
 
   # movement logic
   allowForwardDownhill: true
   enableInclineLimitting: false
 
   # soil information
-  useSoilInformation: true
+  useSoilInformation: false
   traverseSand: false
   traverseRocks: false
   traverseGravel: true
   traverseConcrete: true
 
-  # obstacle inflation for safety margins (scales robot radius)
+  # obstacle inflation for safety margins (scales the inflation gap beyond the
+  # AABB/OBB collision radius).  Minimum enforced value is 1.0 — setting it lower
+  # is silently clamped and a warning is logged, because the step-height check only
+  # searches within min(robotSizeX, robotSizeY)/2 and inflation must cover the rest
+  # of the footprint.  Increase above 1.0 for extra safety margins.
   obstacleInflationMultiplier: 1.0
