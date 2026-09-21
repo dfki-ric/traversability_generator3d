@@ -115,12 +115,21 @@ BOOST_FIXTURE_TEST_CASE(check_travmap, TraversabilityGenerator3dTest){
     BOOST_REQUIRE(inflatedFrontier != nullptr);
     BOOST_CHECK(inflatedFrontier->getUserData().nodeType != ::traversability_generator3d::NodeType::INFLATED_FRONTIER);
 
-    Eigen::Vector3d positionObs{0.9, 0.9, 0};
+    // The cells bordering the box collide with the robot body volume and become
+    // STEP_HEIGHT obstacles; probe one of them ({0.45,0.45} is diagonally adjacent).
+    Eigen::Vector3d positionObs{0.45, 0.45, 0};
     maps::grid::Index idxObstacleNode;
     travGen->getTraversabilityMap().toGrid(positionObs, idxObstacleNode);
     auto obstacle = travGen->findMatchingTraversabilityPatchAt(idxObstacleNode,0);
     BOOST_REQUIRE(obstacle != nullptr);
     BOOST_CHECK_EQUAL(obstacle->getUserData().nodeType, ::traversability_generator3d::NodeType::OBSTACLE);
+
+    // The box top and the pocket behind it are enclosed by the obstacle ring, so
+    // expansion never reaches them: those cells contain no node at all.
+    Eigen::Vector3d positionPocket{0.9, 0.9, 0};
+    maps::grid::Index idxPocket;
+    travGen->getTraversabilityMap().toGrid(positionPocket, idxPocket);
+    BOOST_CHECK(travGen->getTraversabilityMap().at(idxPocket).empty());
 
     Eigen::Vector3d positionInfObst{0.9, 0.3, 0};
     maps::grid::Index idxInfObstNode;
@@ -136,7 +145,9 @@ BOOST_FIXTURE_TEST_CASE(check_travmap, TraversabilityGenerator3dTest){
         BOOST_CHECK_EQUAL(inflatedObstacle->getUserData().nodeType, ::traversability_generator3d::NodeType::OBSTACLE);
     }
 
-    Eigen::Vector3d positionTrav{0.3, 0.3, 0};
+    // {0.3,0.3} falls into the obstacle ring around the box now (robot-size inflation),
+    // so probe well away from the box for a plain traversable node.
+    Eigen::Vector3d positionTrav{-0.45, -0.45, 0};
     maps::grid::Index idxTraversableNode;
     travGen->getTraversabilityMap().toGrid(positionTrav, idxTraversableNode);
     auto traversable = travGen->findMatchingTraversabilityPatchAt(idxTraversableNode,0);
@@ -194,22 +205,28 @@ BOOST_FIXTURE_TEST_CASE(check_stepheight, TraversabilityGenerator3dTest){
     startPositions.emplace_back(Eigen::Vector3d(0,0,0));
     travGen->expandAll(startPositions);
 
-    Eigen::Vector3d positionObs{0.25, 0.25, 0};
+    // The box-top cell itself is fitted and becomes PARTIALLY_TRAVERSABLE; the step
+    // is detected on the ADJACENT cells, whose robot body volume collides with the
+    // 0.1m box top (STEP_HEIGHT obstacle). Probe the cell just south of the box.
+    Eigen::Vector3d positionObs{0.25, -0.05, 0};
     maps::grid::Index idxObstacleNode;
 
     travGen->getTraversabilityMap().toGrid(positionObs, idxObstacleNode);
+    BOOST_REQUIRE(!travGen->getTraversabilityMap().at(idxObstacleNode).empty());
     for(auto *snode : travGen->getTraversabilityMap().at(idxObstacleNode))
     {
         BOOST_CHECK_EQUAL(snode->getType(), ::maps::grid::TraversabilityNodeBase::OBSTACLE);
+        BOOST_CHECK(snode->getUserData().obstacleCause == ::traversability_generator3d::ObstacleCause::STEP_HEIGHT);
     }
     delete travGen;
 
     traversabilityConfig.maxStepHeight = 0.2;
     travGen = new traversability_generator3d::TraversabilityGenerator3d(traversabilityConfig);
-    travGen->setMLSGrid(mlsPtr);       
+    travGen->setMLSGrid(mlsPtr);
     travGen->expandAll(startPositions);
 
     travGen->getTraversabilityMap().toGrid(positionObs, idxObstacleNode);
+    BOOST_REQUIRE(!travGen->getTraversabilityMap().at(idxObstacleNode).empty());
     for(auto *snode : travGen->getTraversabilityMap().at(idxObstacleNode))
     {
         BOOST_CHECK_EQUAL(snode->getType(), ::maps::grid::TraversabilityNodeBase::TRAVERSABLE);
@@ -304,14 +321,23 @@ BOOST_FIXTURE_TEST_CASE(check_frontier_inflation, TraversabilityGenerator3dTest)
     travGen->setMLSGrid(mlsPtr);
     travGen->expandAll({0,0,0});
 
-    size_t inflatedFrontierCount = 0;
+    // Frontiers were removed: unmeasured cells become OBSTACLE (cause UNMEASURED) at
+    // creation, so the unexplored border must show up as UNMEASURED obstacles and no
+    // FRONTIER/INFLATED_FRONTIER node may exist.
+    size_t frontierCount = 0;
+    size_t unmeasuredObstacleCount = 0;
     for (auto& level : travGen->getTraversabilityMap())
         for (auto* n : level){
-            if (n->getUserData().nodeType == traversability_generator3d::NodeType::INFLATED_FRONTIER)
-                inflatedFrontierCount++;
+            if (n->getUserData().nodeType == traversability_generator3d::NodeType::FRONTIER ||
+                n->getUserData().nodeType == traversability_generator3d::NodeType::INFLATED_FRONTIER)
+                frontierCount++;
+            if (n->getUserData().nodeType == traversability_generator3d::NodeType::OBSTACLE &&
+                n->getUserData().obstacleCause == traversability_generator3d::ObstacleCause::UNMEASURED)
+                unmeasuredObstacleCount++;
         }
 
-    BOOST_CHECK_GT(inflatedFrontierCount, 0);
+    BOOST_CHECK_EQUAL(frontierCount, 0);
+    BOOST_CHECK_GT(unmeasuredObstacleCount, 0);
     delete travGen;
 }
 
