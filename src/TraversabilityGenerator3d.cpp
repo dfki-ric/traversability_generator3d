@@ -1471,7 +1471,7 @@ void TraversabilityGenerator3d::inflateObstacles()
             // Some orientations are safe — partially traversable
             node->setType(TraversabilityNodeBase::TRAVERSABLE);
             node->getUserData().nodeType = NodeType::PARTIALLY_TRAVERSABLE;
-            node->getUserData().obstacleCause = ObstacleCause::NONE;
+            node->getUserData().obstacleCause = ObstacleCause::CAUSE_NONE;
         }
         else
         {
@@ -1481,7 +1481,7 @@ void TraversabilityGenerator3d::inflateObstacles()
             node->getUserData().nodeType = NodeType::OBSTACLE;
             // computeSafeOrientations records MAP_BOUNDARY itself when the swept
             // window left the grid; only genuine all-yaws-collide is NO_SAFE_YAW.
-            if (node->getUserData().obstacleCause == ObstacleCause::NONE)
+            if (node->getUserData().obstacleCause == ObstacleCause::CAUSE_NONE)
                 node->getUserData().obstacleCause = ObstacleCause::NO_SAFE_YAW;
         }
     }

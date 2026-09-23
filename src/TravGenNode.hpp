@@ -32,10 +32,13 @@ enum NodeType
 };
 
 /** WHY a node became OBSTACLE — for debugging/visualization (the planner only
- *  reads the node type). Set wherever a node is typed OBSTACLE. */
-enum class ObstacleCause : uint8_t
+ *  reads the node type). Set wherever a node is typed OBSTACLE.
+ *  Plain enum (no enum class): orogen/typelib cannot represent scoped enums,
+ *  it generates namespace-scope references in the typekits. CAUSE_NONE is
+ *  prefixed because SlopeMetric already puts NONE into this namespace. */
+enum ObstacleCause
 {
-    NONE = 0,        ///< node is not an obstacle
+    CAUSE_NONE = 0,  ///< node is not an obstacle
     UNMEASURED,      ///< ground-plane fit failed (no/too sparse data)
     STEEP_SLOPE,     ///< fitted slope > maxSlope
     STEP_HEIGHT,     ///< patch collides with the robot body volume
@@ -70,7 +73,7 @@ struct TravGenTrackingData
     NodeType nodeType = NodeType::UNSET;
 
     /** Why this node is OBSTACLE (NONE otherwise); debugging/visualization only. */
-    ObstacleCause obstacleCause = ObstacleCause::NONE;
+    ObstacleCause obstacleCause = ObstacleCause::CAUSE_NONE;
 
     int cost = 0;
 
