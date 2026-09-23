@@ -382,10 +382,12 @@ void TraversabilityGenerator3dGui::loadTravConfigFromYaml(const std::string& fil
     obstacleInflationMultiplierSpin->blockSignals(false);
 
     slopeMetricCombo->blockSignals(true);
-    if      (travConfig.slopeMetric == traversability_generator3d::AVG_SLOPE)      slopeMetricCombo->setCurrentText("AVG_SLOPE");
-    else if (travConfig.slopeMetric == traversability_generator3d::MAX_SLOPE)      slopeMetricCombo->setCurrentText("MAX_SLOPE");
-    else if (travConfig.slopeMetric == traversability_generator3d::TRIANGLE_SLOPE) slopeMetricCombo->setCurrentText("TRIANGLE_SLOPE");
-    else                                                                           slopeMetricCombo->setCurrentText("NONE");
+    // findText+setCurrentIndex instead of setCurrentText: the latter is Qt5-only
+    // and the CI also builds the Qt4 variant of this GUI.
+    if      (travConfig.slopeMetric == traversability_generator3d::AVG_SLOPE)      slopeMetricCombo->setCurrentIndex(slopeMetricCombo->findText("AVG_SLOPE"));
+    else if (travConfig.slopeMetric == traversability_generator3d::MAX_SLOPE)      slopeMetricCombo->setCurrentIndex(slopeMetricCombo->findText("MAX_SLOPE"));
+    else if (travConfig.slopeMetric == traversability_generator3d::TRIANGLE_SLOPE) slopeMetricCombo->setCurrentIndex(slopeMetricCombo->findText("TRIANGLE_SLOPE"));
+    else                                                                           slopeMetricCombo->setCurrentIndex(slopeMetricCombo->findText("NONE"));
     slopeMetricCombo->blockSignals(false);
 
     allowForwardDownhillCheck->blockSignals(true);
