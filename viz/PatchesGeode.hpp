@@ -36,10 +36,10 @@
 
 namespace vizkit3d {
 
-    class PatchesGeode : public osg::Geode
+    class TravPatchesGeode : public osg::Geode
     {
     public:
-        PatchesGeode(float x_res, float y_res);
+        TravPatchesGeode(float x_res, float y_res);
 
         void setPosition(float x, float y)
         {

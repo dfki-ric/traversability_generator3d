@@ -32,7 +32,7 @@
 
 namespace vizkit3d
 {
-    PatchesGeode::PatchesGeode(float x_res, float y_res)
+    TravPatchesGeode::TravPatchesGeode(float x_res, float y_res)
         : vertex_index(0),
           xp(0), yp(0),
           xs(x_res), ys(y_res),
@@ -60,9 +60,20 @@ namespace vizkit3d
         geom->setColorArray(colors);
         geom->setColorBinding(osg::Geometry::BIND_PER_VERTEX);
 
+        // The GL3 shader installed by maps' MLSMapVisualization reads normals
+        // and colors from vertex attribute locations 1 and 2. This class also
+        // exists in maps/viz (same vizkit3d::TravPatchesGeode symbol - the dynamic
+        // linker picks one copy per process), so keep both copies shader
+        // compatible: without these bindings all patches render black in
+        // binaries where this copy wins (e.g. ugv_nav4d_bin-qt5).
+        geom->setVertexAttribArray(1, normals);
+        geom->setVertexAttribBinding(1, osg::Geometry::BIND_PER_VERTEX);
+        geom->setVertexAttribArray(2, colors);
+        geom->setVertexAttribBinding(2, osg::Geometry::BIND_PER_VERTEX);
+
         addDrawable(geom);
     }
-    void PatchesGeode::drawPlane(
+    void TravPatchesGeode::drawPlane(
             const float & zp,
             const float & height,
             const osg::Vec3& mean,
@@ -179,7 +190,7 @@ namespace vizkit3d
         return osg::Vec3( v.x(), v.y(), v.z() );
     }
 
-    void PatchesGeode::drawPlane(
+    void TravPatchesGeode::drawPlane(
         const Eigen::Hyperplane<float, 3> & plane,
         const float & min,
         const float & max,
@@ -259,7 +270,7 @@ namespace vizkit3d
         }
     }
 
-    void PatchesGeode::drawHorizontalPlane(const float& z, const float& stdev)
+    void TravPatchesGeode::drawHorizontalPlane(const float& z, const float& stdev)
     {
         const osg::Vec3 position(xp, yp, z);
         const osg::Vec2 extents(xs*0.5f, ys*0.5f);
@@ -286,7 +297,7 @@ namespace vizkit3d
 
     }
 
-    void PatchesGeode::drawBox(
+    void TravPatchesGeode::drawBox(
             const float& top,
             const float& height,
             const osg::Vec3& c_normal,
@@ -359,7 +370,7 @@ namespace vizkit3d
         }
     }
 
-    void PatchesGeode::addVertex(const osg::Vec3& p, const osg::Vec3& n, const float & stdev)
+    void TravPatchesGeode::addVertex(const osg::Vec3& p, const osg::Vec3& n, const float & stdev)
     {
         vertices->push_back( p );
         normals->push_back( n );
@@ -374,13 +385,13 @@ namespace vizkit3d
         colors->push_back( color );
     }
 
-    void PatchesGeode::updateColor()
+    void TravPatchesGeode::updateColor()
     {
         vizkit3d::hslToRgb(hue, sat, lum , color.x(), color.y(), color.z());
         color.w() = alpha;
     }
 
-    void PatchesGeode::closePolygon()
+    void TravPatchesGeode::closePolygon()
     {
         geom->addPrimitiveSet(
                 new osg::DrawArrays(
@@ -393,7 +404,7 @@ namespace vizkit3d
         vertex_index = vertices->size();
     }
 
-    void PatchesGeode::closeQuads()
+    void TravPatchesGeode::closeQuads()
     {
         geom->addPrimitiveSet(
                 new osg::DrawArrays(
@@ -406,13 +417,13 @@ namespace vizkit3d
         vertex_index = vertices->size();
     }
 
-    void PatchesGeode::setColor(const osg::Vec4& color)
+    void TravPatchesGeode::setColor(const osg::Vec4& color)
     {
         // TODO ideally this should also change the HSVA values
         this->color = color;
     }
 
-    void PatchesGeode::setColorHSVA(float hue, float sat, float lum, float alpha)
+    void TravPatchesGeode::setColorHSVA(float hue, float sat, float lum, float alpha)
     {
         this->hue = hue;
         this->sat = sat;
@@ -422,22 +433,22 @@ namespace vizkit3d
         updateColor();
     }
 
-    void PatchesGeode::setCycleColorInterval(float cycle_color_interval)
+    void TravPatchesGeode::setCycleColorInterval(float cycle_color_interval)
     {
         this->cycle_color_interval = cycle_color_interval;
     }
 
-    void PatchesGeode::showCycleColor(bool cycle_color)
+    void TravPatchesGeode::showCycleColor(bool cycle_color)
     {
         this->cycle_color = cycle_color;
     }
 
-    void PatchesGeode::setUncertaintyScale(double uncertainty_scale)
+    void TravPatchesGeode::setUncertaintyScale(double uncertainty_scale)
     {
         this->uncertaintyScale = uncertainty_scale;
     }
 
-    void PatchesGeode::drawLines()
+    void TravPatchesGeode::drawLines()
     {
         osg::ref_ptr<osg::Geometry> var_geom = new osg::Geometry;
         var_geom->setVertexArray( var_vertices );
