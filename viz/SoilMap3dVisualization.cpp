@@ -114,9 +114,9 @@ void SoilMap3dVisualization::visualizeNode(const SoilNode* node)
         return;
     }
 
-    PatchesGeode *geode = dynamic_cast<PatchesGeode *>(nodeGeode.get());
+    TravPatchesGeode *geode = dynamic_cast<TravPatchesGeode *>(nodeGeode.get());
     if (!geode) {
-        LOG_ERROR_S << "SoilMap3dVisualization: nodeGeode is not a PatchesGeode!";
+        LOG_ERROR_S << "SoilMap3dVisualization: nodeGeode is not a TravPatchesGeode!";
         return;
     }
 
@@ -207,12 +207,12 @@ void vizkit3d::SoilMap3dVisualization::updateMainNode(osg::Node* node)
     //clear old data
     localNode->removeChildren(0, localNode->getNumChildren());
 
-    nodeGeode = new PatchesGeode(map.getResolution().x(), map.getResolution().y());
+    nodeGeode = new TravPatchesGeode(map.getResolution().x(), map.getResolution().y());
     linesNode = new osgviz::LinesNode(osg::Vec4(1, 1, 1, 1));
     localNode->addChild(nodeGeode);
     localNode->addChild(linesNode);
     
-    PatchesGeode *geode = dynamic_cast<PatchesGeode *>(nodeGeode.get());
+    TravPatchesGeode *geode = dynamic_cast<TravPatchesGeode *>(nodeGeode.get());
     geode->setColor(osg::Vec4d(1,0,0,1));
     geode->setShowPatchExtents(true);
     geode->setShowNormals(true);
