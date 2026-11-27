@@ -8,9 +8,14 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-22.04, ubuntu-24.04, ubuntu-26.04 ]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: build_traversability_generator3d
       run: |
         mkdir build && cd build

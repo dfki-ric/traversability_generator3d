@@ -1,4 +1,4 @@
-find_package(PCL 1.7 REQUIRED COMPONENTS segmentation)
+find_package(PCL 1.10 REQUIRED COMPONENTS segmentation)
 find_package(CGAL REQUIRED COMPONENTS Core)
 find_package(Boost REQUIRED COMPONENTS serialization)
 
@@ -18,10 +18,17 @@ rock_library(traversability_generator3d
         maps
         pcl_segmentation${PCL_VERSION_SUFFIX}
         vizkit3d_debug_drawings-commands
-    LIBS
+    # exported to the .pc file: the public header includes CGAL, whose headers
+    # need its link dependencies (GMP, MPFR) in the consumers (CGAL >= 6)
+    DEPS_TARGET
         CGAL::CGAL
+    DEPS
+        # for its usage requirements, e.g. the C++ standard (C++17 from PCL 1.15 on)
+        pcl_segmentation
+    LIBS
         Boost::serialization
 )
+target_compile_features(traversability_generator3d PUBLIC cxx_std_14)
 
 # Multi-threaded map expansion / obstacle inflation (wave-parallel OpenMP pragmas
 # in TraversabilityGenerator3d.cpp). Without OpenMP the pragmas are ignored and

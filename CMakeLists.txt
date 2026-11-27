@@ -1,6 +1,6 @@
 # CMakeLists.txt has to be located in the project folder and cmake has to be
 # executed from 'project/build' with 'cmake ../'.
-cmake_minimum_required(VERSION 3.9)
+cmake_minimum_required(VERSION 3.10)
 project(traversability_generator3d
         VERSION 1.0
         DESCRIPTION "C++ library for generating 3D traversability maps from MLS terrain data"
@@ -17,9 +17,6 @@ if(INSTALL_DEPS)
 endif()
 
 find_package(Rock)
-
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(ENABLE_DEBUG_DRAWINGS)
     message(STATUS "ENABLE_DEBUG_DRAWINGS is defined with value: ${ENABLE_DEBUG_DRAWINGS}")
