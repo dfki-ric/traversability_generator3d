@@ -18,8 +18,11 @@ rock_library(traversability_generator3d
         maps
         pcl_segmentation${PCL_VERSION_SUFFIX}
         vizkit3d_debug_drawings-commands
-    LIBS
+    # exported to the .pc file: the public header includes CGAL, whose headers
+    # need its link dependencies (GMP, MPFR) in the consumers (CGAL >= 6)
+    DEPS_TARGET
         CGAL::CGAL
+    LIBS
         Boost::serialization
 )
 
