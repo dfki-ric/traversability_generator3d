@@ -1,8 +1,8 @@
-name: C/C++ CI
+name: Documentation
 
 on:
   push:
-    branches: [ "main", "feat-build-doc" ]
+    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
@@ -10,7 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: Install dependencies
       run: sudo apt-get update && sudo apt-get install -y graphviz doxygen
       shell: bash
@@ -35,6 +35,7 @@ jobs:
       shell: bash
 
     - name: Deploy to GitHub Pages
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       uses: JamesIves/github-pages-deploy-action@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
